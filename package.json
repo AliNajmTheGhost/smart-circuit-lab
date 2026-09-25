@@ -1,0 +1,25 @@
+{
+  "name": "nabd",
+  "version": "0.1.0",
+  "description": "نبض - مختبر محاكاة الدوائر الكهربائية والإلكترونية لطلاب التعليم المهني",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/ibm-plex-sans-arabic": "^5.3.0"
+  },
+  "private": true
+}
