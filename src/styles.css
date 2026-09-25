@@ -538,6 +538,22 @@ select {
   stroke: var(--accent);
   stroke-width: 2;
 }
+.marquee {
+  fill: var(--sel-fill);
+  stroke: var(--accent);
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+.multi-count {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 4px 0 0;
+}
+.small {
+  font-size: 0.82rem;
+  margin-top: 10px;
+}
 .wirepreview {
   stroke: var(--accent);
   stroke-width: 2.5;

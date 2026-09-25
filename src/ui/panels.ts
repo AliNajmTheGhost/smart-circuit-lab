@@ -325,16 +325,32 @@ export class Panels {
     const s = app.selection;
     const part = s?.kind === 'part' ? app.part(s.id) : undefined;
     // While typing in a field, a document change must not rebuild the form under the cursor.
-    const key = `${s?.kind}:${s?.id}:${part ? JSON.stringify(part.params) : ''}:${app.broken.has(s?.id ?? '')}:${getLang()}:${part?.label}`;
+    const key = `${app.selCount}:${s?.kind}:${s?.id}:${part ? JSON.stringify(part.params) : ''}:${app.broken.has(s?.id ?? '')}:${getLang()}:${part?.label}`;
     if (soft && key === this.inspectorKey) return;
-    if (soft && el.contains(document.activeElement) && (document.activeElement as HTMLElement).tagName === 'INPUT' && key.split(':')[1] === this.inspectorKey.split(':')[1]) return;
+    if (soft && el.contains(document.activeElement) && (document.activeElement as HTMLElement).tagName === 'INPUT' && key.split(':')[2] === this.inspectorKey.split(':')[2]) return;
     this.inspectorKey = key;
     this.live = [];
+
+    if (app.selCount > 1) {
+      el.innerHTML = `<h2>${t('inspector')}</h2>
+        <p class="multi-count">${t('multiSelected', { parts: app.sel.parts.size, wires: app.sel.wires.size })}</p>
+        <div class="actions">
+          <button data-do="duplicate">${icon('copy')}<span>${t('duplicate')}</span></button>
+          <button data-do="delete" class="danger">${icon('trash')}<span>${t('deleteSelected')}</span></button>
+        </div>
+        <p class="muted small">${t('tipMulti')}</p>`;
+      el.querySelector('.actions')!.addEventListener('click', (e) => {
+        const b = (e.target as Element).closest<HTMLElement>('[data-do]');
+        if (b?.dataset.do === 'duplicate') this.board.duplicateSelected();
+        if (b?.dataset.do === 'delete') this.board.deleteSelected();
+      });
+      return;
+    }
 
     if (!s || (!part && s.kind === 'part')) {
       el.innerHTML = `<h2>${t('inspector')}</h2>
         <p class="muted">${t('nothingSelected')}</p>
-        <ul class="tips"><li>${t('tipPlace')}</li><li>${t('tipWire')}</li><li>${t('tipMove')}</li><li class="kbd-tip">${t('tipKeys')}</li></ul>`;
+        <ul class="tips"><li>${t('tipPlace')}</li><li>${t('tipWire')}</li><li>${t('tipMove')}</li><li>${t('tipBox')}</li><li>${t('tipPan')}</li><li class="kbd-tip">${t('tipKeys')}</li></ul>`;
       return;
     }
 
@@ -553,6 +569,9 @@ export class Panels {
     } else if (ctrl && k === 's') {
       e.preventDefault();
       this.app.exportFile();
+    } else if (ctrl && k === 'a') {
+      e.preventDefault();
+      this.app.selectAll();
     } else if (ctrl && k === 'd') {
       e.preventDefault();
       this.board.duplicateSelected();

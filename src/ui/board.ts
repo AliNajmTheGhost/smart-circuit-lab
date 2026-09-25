@@ -1,5 +1,5 @@
 import { t } from '../i18n';
-import { insertIntoWires, lWires, makePart } from '../model/docops';
+import { insertIntoWires, lWires, makePart, newId } from '../model/docops';
 import { defOf, pinWorld } from '../model/library';
 import { GRID, keyOf, rotatePt, snap, type CircuitDoc, type Part, type Pt } from '../model/types';
 import { fmt } from '../units';
@@ -23,12 +23,29 @@ interface WireRefs {
 }
 
 type Drag =
-  | { kind: 'part'; id: string; start: Pt; orig: Pt; attach: Attach[]; moved: boolean; snapshot: string; pointer: number }
+  | {
+      kind: 'group';
+      /** The part under the pointer, used for switch clicks. */
+      clicked: string | null;
+      parts: string[];
+      wires: string[];
+      start: Pt;
+      origParts: Map<string, Pt>;
+      origWires: Map<string, { a: Pt; b: Pt }>;
+      attach: Attach[];
+      moved: boolean;
+      lastDx: number;
+      lastDy: number;
+      snapshot: string;
+      pointer: number;
+    }
+  | { kind: 'box'; start: Pt; cur: Pt; add: boolean; pointer: number }
   | { kind: 'wire'; from: Pt; moved: boolean; onWire: boolean; pointer: number }
   | { kind: 'pan'; start: Pt; orig: Pt; pointer: number }
   | { kind: 'pinch'; dist: number; zoom: number; mid: Pt; pan: Pt };
 
 interface Attach {
+  part: string;
   wire: string;
   end: 'a' | 'b';
   pin: number;
@@ -52,8 +69,8 @@ function attachments(doc: CircuitDoc, part: Part): Attach[] {
   for (let i = 0; i < n; i++) {
     const k = keyOf(pinWorld(part, i));
     for (const w of doc.wires) {
-      if (keyOf(w.a) === k) out.push({ wire: w.id, end: 'a', pin: i });
-      if (keyOf(w.b) === k) out.push({ wire: w.id, end: 'b', pin: i });
+      if (keyOf(w.a) === k) out.push({ part: part.id, wire: w.id, end: 'a', pin: i });
+      if (keyOf(w.b) === k) out.push({ part: part.id, wire: w.id, end: 'b', pin: i });
     }
   }
   return out;
@@ -247,7 +264,6 @@ export class Board {
   // ------------------------------------------------------------ pointer input
 
   private down(e: PointerEvent): void {
-    if (e.button === 2) return;
     try {
       this.svg.setPointerCapture(e.pointerId);
     } catch {
@@ -297,30 +313,63 @@ export class Board {
       this.drag = { kind: 'wire', from: pin, moved: false, onWire: false, pointer: e.pointerId };
       return;
     }
+    const additive = e.shiftKey || e.ctrlKey || e.metaKey;
     if (partEl) {
       const id = partEl.dataset.id!;
       const part = app.part(id)!;
-      app.select({ kind: 'part', id });
-      this.drag = {
-        kind: 'part',
-        id,
-        start: w,
-        orig: { x: part.x, y: part.y },
-        attach: attachments(app.doc, part),
-        moved: false,
-        snapshot: JSON.stringify(app.doc),
-        pointer: e.pointerId,
-      };
+      if (additive) {
+        app.toggleSelected('part', id);
+        return;
+      }
+      if (!app.isSelected('part', id)) app.select({ kind: 'part', id });
+      this.startGroupDrag(w, id, e.pointerId);
       if (defOf(part.type).interactive === 'momentary') app.setParam(id, 'closed', 1, false);
       return;
     }
     if (wireEl) {
-      app.select({ kind: 'wire', id: wireEl.dataset.id! });
+      const id = wireEl.dataset.id!;
+      if (additive) {
+        app.toggleSelected('wire', id);
+        return;
+      }
+      if (app.isSelected('wire', id) && app.selCount > 1) {
+        this.startGroupDrag(w, null, e.pointerId);
+        return;
+      }
+      app.select({ kind: 'wire', id });
       this.drag = { kind: 'wire', from: s, moved: false, onWire: true, pointer: e.pointerId };
       return;
     }
-    app.select(null);
+    // Empty board: the mouse draws a selection box; touch, right and middle buttons pan.
+    if (!touch && e.button === 0) {
+      if (!additive) app.select(null);
+      this.drag = { kind: 'box', start: w, cur: w, add: additive, pointer: e.pointerId };
+      return;
+    }
     this.drag = { kind: 'pan', start: this.screen(e), orig: { ...this.pan }, pointer: e.pointerId };
+  }
+
+  /** Drag everything that is selected; wires attached to moving parts stretch to follow. */
+  private startGroupDrag(w: Pt, clicked: string | null, pointer: number): void {
+    const app = this.app;
+    const parts = [...app.sel.parts].map((id) => app.part(id)).filter((p): p is Part => !!p);
+    const wires = app.doc.wires.filter((x) => app.sel.wires.has(x.id));
+    const attach = parts.flatMap((p) => attachments(app.doc, p)).filter((a) => !app.sel.wires.has(a.wire));
+    this.drag = {
+      kind: 'group',
+      clicked,
+      parts: parts.map((p) => p.id),
+      wires: wires.map((x) => x.id),
+      start: w,
+      origParts: new Map(parts.map((p) => [p.id, { x: p.x, y: p.y }])),
+      origWires: new Map(wires.map((x) => [x.id, { a: { ...x.a }, b: { ...x.b } }])),
+      attach,
+      moved: false,
+      lastDx: 0,
+      lastDy: 0,
+      snapshot: JSON.stringify(app.doc),
+      pointer,
+    };
   }
 
   /** On switches the whole body toggles; only start a wire when the pointer is really on the pin. */
@@ -349,18 +398,39 @@ export class Board {
       this.applyView();
       return;
     }
-    if (d?.kind === 'part') {
-      const part = this.app.part(d.id);
-      if (!part) return;
-      const nx = d.orig.x + snap(w.x - d.start.x);
-      const ny = d.orig.y + snap(w.y - d.start.y);
-      if (nx !== part.x || ny !== part.y) {
-        part.x = nx;
-        part.y = ny;
-        d.moved = true;
-        followPins(this.app.doc, part, d.attach);
-        this.render();
+    if (d?.kind === 'group') {
+      const dx = snap(w.x - d.start.x);
+      const dy = snap(w.y - d.start.y);
+      if (dx === d.lastDx && dy === d.lastDy) return;
+      d.lastDx = dx;
+      d.lastDy = dy;
+      d.moved = dx !== 0 || dy !== 0 || d.moved;
+      const doc = this.app.doc;
+      for (const id of d.parts) {
+        const p = this.app.part(id);
+        const op = d.origParts.get(id)!;
+        if (p) {
+          p.x = op.x + dx;
+          p.y = op.y + dy;
+        }
       }
+      for (const x of doc.wires) {
+        const ow = d.origWires.get(x.id);
+        if (!ow) continue;
+        x.a = { x: ow.a.x + dx, y: ow.a.y + dy };
+        x.b = { x: ow.b.x + dx, y: ow.b.y + dy };
+      }
+      for (const a of d.attach) {
+        const p = this.app.part(a.part);
+        const x = doc.wires.find((q) => q.id === a.wire);
+        if (p && x) x[a.end] = pinWorld(p, a.pin);
+      }
+      this.render();
+      return;
+    }
+    if (d?.kind === 'box') {
+      d.cur = w;
+      this.drawOverlay();
       return;
     }
     if (d?.kind === 'wire') {
@@ -383,23 +453,32 @@ export class Board {
     if (d.pointer !== e.pointerId) return;
     this.drag = null;
     const app = this.app;
-    if (d.kind === 'part') {
-      const part = app.part(d.id);
-      if (!part) return;
-      const def = defOf(part.type);
-      if (def.interactive === 'momentary') app.setParam(d.id, 'closed', 0, false);
+    if (d.kind === 'group') {
+      const part = d.clicked ? app.part(d.clicked) : undefined;
+      const def = part ? defOf(part.type) : undefined;
+      if (part && def?.interactive === 'momentary') app.setParam(part.id, 'closed', 0, false);
       if (d.moved) {
         const moved = JSON.stringify(app.doc);
         app.doc = JSON.parse(d.snapshot);
         app.commit((doc) => {
           Object.assign(doc, JSON.parse(moved));
-          const p = doc.parts.find((q) => q.id === d.id);
-          if (p) insertIntoWires(doc, p);
+          if (d.parts.length === 1 && d.wires.length === 0) {
+            const p = doc.parts.find((q) => q.id === d.parts[0]);
+            if (p) insertIntoWires(doc, p);
+          }
         });
-      } else if (!cancelled && def.interactive === 'toggle') {
+      } else if (!cancelled && part && def?.interactive === 'toggle') {
         const key = part.type === 'logicin' ? 'state' : 'closed';
-        app.setParam(d.id, key, Number(part.params[key]) === 1 ? 0 : 1, false);
+        app.setParam(part.id, key, Number(part.params[key]) === 1 ? 0 : 1, false);
+      } else if (!cancelled && part && app.selCount > 1) {
+        // A plain click on one item of a group selects just that item.
+        app.select({ kind: 'part', id: part.id });
       }
+      return;
+    }
+    if (d.kind === 'box') {
+      this.finishBox(d);
+      this.drawOverlay();
       return;
     }
     if (d.kind === 'wire' && !cancelled) {
@@ -415,9 +494,26 @@ export class Board {
     }
   }
 
+  private finishBox(d: { start: Pt; cur: Pt; add: boolean }): void {
+    const x0 = Math.min(d.start.x, d.cur.x);
+    const x1 = Math.max(d.start.x, d.cur.x);
+    const y0 = Math.min(d.start.y, d.cur.y);
+    const y1 = Math.max(d.start.y, d.cur.y);
+    if (x1 - x0 < 4 / this.zoom && y1 - y0 < 4 / this.zoom) return;
+    const inside = (p: Pt) => p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1;
+    const parts = this.app.doc.parts
+      .filter((p) => {
+        const b = this.partBox(p);
+        return b.x < x1 && b.x + b.w > x0 && b.y < y1 && b.y + b.h > y0;
+      })
+      .map((p) => p.id);
+    const wires = this.app.doc.wires.filter((w) => inside(w.a) && inside(w.b)).map((w) => w.id);
+    this.app.selectMany(parts, wires, d.add);
+  }
+
   private cancelDrag(): void {
     const d = this.drag;
-    if (d?.kind === 'part' && d.moved) {
+    if (d?.kind === 'group' && d.moved) {
       this.app.doc = JSON.parse(d.snapshot);
       this.render();
     }
@@ -464,27 +560,39 @@ export class Board {
   }
 
   deleteSelected(): void {
-    const s = this.app.selection;
-    if (!s) return;
-    this.app.commit((d) => {
-      if (s.kind === 'part') d.parts = d.parts.filter((p) => p.id !== s.id);
-      else d.wires = d.wires.filter((w) => w.id !== s.id);
+    const app = this.app;
+    if (!app.selCount) return;
+    const parts = new Set(app.sel.parts);
+    const wires = new Set(app.sel.wires);
+    app.commit((d) => {
+      d.parts = d.parts.filter((p) => !parts.has(p.id));
+      d.wires = d.wires.filter((w) => !wires.has(w.id));
     });
-    this.app.select(null);
+    app.select(null);
   }
 
+  /** Copy the selection (parts and the wires between them) two grid squares down and across. */
   duplicateSelected(): void {
-    const s = this.app.selection;
-    if (s?.kind !== 'part') return;
-    const src = this.app.part(s.id);
-    if (!src) return;
-    let id = '';
-    this.app.commit((d) => {
-      const p = makePart(d, src.type, src.x + 2 * GRID, src.y + 2 * GRID, src.rot, { ...src.params });
-      d.parts.push(p);
-      id = p.id;
+    const app = this.app;
+    if (!app.selCount) return;
+    const off = 2 * GRID;
+    const srcParts = app.doc.parts.filter((p) => app.sel.parts.has(p.id));
+    const srcWires = app.doc.wires.filter((w) => app.sel.wires.has(w.id));
+    const newParts: string[] = [];
+    const newWires: string[] = [];
+    app.commit((d) => {
+      for (const src of srcParts) {
+        const p = makePart(d, src.type, src.x + off, src.y + off, src.rot, { ...src.params });
+        d.parts.push(p);
+        newParts.push(p.id);
+      }
+      for (const w of srcWires) {
+        const id = newId('w');
+        d.wires.push({ id, a: { x: w.a.x + off, y: w.a.y + off }, b: { x: w.b.x + off, y: w.b.y + off } });
+        newWires.push(id);
+      }
     });
-    this.app.select({ kind: 'part', id });
+    app.selectMany(newParts, newWires);
   }
 
   // ------------------------------------------------------------ drawing
@@ -503,12 +611,11 @@ export class Board {
   render(): void {
     this.applyView();
     const app = this.app;
-    const sel = app.selection;
     const std = app.std;
 
     this.gWires.innerHTML = app.doc.wires
       .map((w) => {
-        const cls = sel?.kind === 'wire' && sel.id === w.id ? ' selected' : '';
+        const cls = app.isSelected('wire', w.id) ? ' selected' : '';
         const xy = `x1="${w.a.x}" y1="${w.a.y}" x2="${w.b.x}" y2="${w.b.y}"`;
         return `<g class="wire${cls}" data-id="${w.id}"><line class="hit" ${xy}/><line class="w" ${xy}/><line class="flow" ${xy}/></g>`;
       })
@@ -520,7 +627,7 @@ export class Board {
         const def = defOf(p.type);
         const b = def.box;
         const broken = app.broken.has(p.id);
-        const cls = `part type-${p.type}${sel?.kind === 'part' && sel.id === p.id ? ' selected' : ''}${broken ? ' broken' : ''}${def.interactive ? ' interactive' : ''}`;
+        const cls = `part type-${p.type}${app.isSelected('part', p.id) ? ' selected' : ''}${broken ? ' broken' : ''}${def.interactive ? ' interactive' : ''}`;
         let label = '';
         if (def.labelAt) {
           // Upside-down parts keep their label on top, and upright ones always on the right.
@@ -610,15 +717,18 @@ export class Board {
       else if (n === 1 && app.doc.parts.some((p) => defOf(p.type).pins.some((_, i) => keyOf(pinWorld(p, i)) === k)))
         out.push(`<circle class="openpin" cx="${x}" cy="${y}" r="3.5"/>`);
     }
-    const s = app.selection;
-    if (s?.kind === 'part') {
-      const p = app.part(s.id);
-      if (p) {
-        const b = this.partBox(p);
-        out.push(`<rect class="selbox" x="${b.x - 6}" y="${b.y - 6}" width="${b.w + 12}" height="${b.h + 12}" rx="6"/>`);
-      }
+    for (const id of app.sel.parts) {
+      const p = app.part(id);
+      if (!p) continue;
+      const b = this.partBox(p);
+      out.push(`<rect class="selbox" x="${b.x - 6}" y="${b.y - 6}" width="${b.w + 12}" height="${b.h + 12}" rx="6"/>`);
     }
     const d = this.drag;
+    if (d?.kind === 'box') {
+      const x = Math.min(d.start.x, d.cur.x);
+      const y = Math.min(d.start.y, d.cur.y);
+      out.push(`<rect class="marquee" x="${x}" y="${y}" width="${Math.abs(d.cur.x - d.start.x)}" height="${Math.abs(d.cur.y - d.start.y)}"/>`);
+    }
     if (d?.kind === 'wire' && d.moved) {
       const w = this.hoverWorld;
       const end = this.hover ?? { x: snap(w.x), y: snap(w.y) };

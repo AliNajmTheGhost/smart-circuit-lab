@@ -27,7 +27,8 @@ const MAX_HISTORY = 200;
 
 export class App {
   doc: CircuitDoc = emptyDoc();
-  selection: Selection = null;
+  /** Everything currently selected. The inspector shows details when exactly one thing is selected. */
+  readonly sel = { parts: new Set<string>(), wires: new Set<string>() };
   placing: string | null = null;
   std: SymbolStd = 'ansi';
   running = true;
@@ -91,7 +92,8 @@ export class App {
     this.doc = cloneDoc(doc);
     normalizeWires(this.doc);
     this.broken.clear();
-    this.selection = null;
+    this.sel.parts.clear();
+    this.sel.wires.clear();
     this.topo = '';
     this.afterChange();
     this.emit('select');
@@ -123,11 +125,19 @@ export class App {
   }
 
   private dropStaleSelection(): void {
-    const s = this.selection;
-    if (s && !(s.kind === 'part' ? this.part(s.id) : this.doc.wires.find((w) => w.id === s.id))) {
-      this.selection = null;
-      this.emit('select');
-    }
+    let changed = false;
+    for (const id of this.sel.parts)
+      if (!this.part(id)) {
+        this.sel.parts.delete(id);
+        changed = true;
+      }
+    const wires = new Set(this.doc.wires.map((w) => w.id));
+    for (const id of this.sel.wires)
+      if (!wires.has(id)) {
+        this.sel.wires.delete(id);
+        changed = true;
+      }
+    if (changed) this.emit('select');
   }
 
   private afterChange(): void {
@@ -137,9 +147,51 @@ export class App {
     this.emit('doc');
   }
 
-  select(sel: Selection): void {
-    this.selection = sel;
+  /** The single selected item, or null when nothing or several things are selected. */
+  get selection(): Selection {
+    const { parts, wires } = this.sel;
+    if (parts.size + wires.size !== 1) return null;
+    return parts.size ? { kind: 'part', id: [...parts][0] } : { kind: 'wire', id: [...wires][0] };
+  }
+
+  get selCount(): number {
+    return this.sel.parts.size + this.sel.wires.size;
+  }
+
+  isSelected(kind: 'part' | 'wire', id: string): boolean {
+    return (kind === 'part' ? this.sel.parts : this.sel.wires).has(id);
+  }
+
+  select(s: Selection): void {
+    this.sel.parts.clear();
+    this.sel.wires.clear();
+    if (s) (s.kind === 'part' ? this.sel.parts : this.sel.wires).add(s.id);
     this.emit('select');
+  }
+
+  /** Select several items; with `add` they join the current selection. */
+  selectMany(parts: string[], wires: string[], add = false): void {
+    if (!add) {
+      this.sel.parts.clear();
+      this.sel.wires.clear();
+    }
+    parts.forEach((id) => this.sel.parts.add(id));
+    wires.forEach((id) => this.sel.wires.add(id));
+    this.emit('select');
+  }
+
+  toggleSelected(kind: 'part' | 'wire', id: string): void {
+    const set = kind === 'part' ? this.sel.parts : this.sel.wires;
+    if (set.has(id)) set.delete(id);
+    else set.add(id);
+    this.emit('select');
+  }
+
+  selectAll(): void {
+    this.selectMany(
+      this.doc.parts.map((p) => p.id),
+      this.doc.wires.map((w) => w.id),
+    );
   }
 
   startPlacing(type: string | null): void {
