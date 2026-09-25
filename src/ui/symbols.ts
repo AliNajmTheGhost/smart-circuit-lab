@@ -66,6 +66,32 @@ function gateBody(type: string, std: SymbolStd): string {
   return inputs + body + out;
 }
 
+
+/** Two small arrows pointing at (x, y) from the upper left: light falling on a sensor. */
+function lightIn(x: number, y: number): string {
+  return L(x - 14, y - 16, x - 4, y - 6) + arrowHead(x - 14, y - 16, x - 3, y - 5, 6) + L(x - 2, y - 18, x + 8, y - 8) + arrowHead(x - 2, y - 18, x + 9, y - 7, 6);
+}
+
+/** Clock input triangle on the left edge of an IC body. */
+const clockMark = (x: number, y: number): string => `<polyline points="${x},${y - 6} ${x + 8},${y} ${x},${y + 6}" fill="none"/>`;
+
+/** Q̄ drawn as Q with a bar over it. */
+const qBar = (x: number, y: number): string => T(x, y, 'Q', ' class="sym-text tiny"') + L(x - 4, y - 10, x + 4, y - 10, ' stroke-width="1.2"');
+
+const SEG_SHAPES: Record<string, [number, number, number, number]> = {
+  a: [-3, -33, 26, 5],
+  b: [23, -29, 5, 26],
+  c: [23, 3, 5, 26],
+  d: [-3, 28, 26, 5],
+  e: [-7, 3, 5, 26],
+  f: [-7, -29, 5, 26],
+  g: [-3, -2.5, 26, 5],
+};
+
+function icBox(x0: number, y0: number, w: number, h: number, title: string): string {
+  return `<rect class="bg ic" x="${x0}" y="${y0}" width="${w}" height="${h}" rx="3"/>` + T(x0 + w / 2, y0 + h / 2 + 5, title, ' class="sym-text ictitle"');
+}
+
 /** SVG for a part in its own coordinates (before rotation). Colours come from CSS. */
 export function symbolSvg(type: string, params: Record<string, ParamValue>, std: SymbolStd, rot = 0): string {
   turn = rot % 4;
@@ -218,6 +244,142 @@ export function symbolSvg(type: string, params: Record<string, ParamValue>, std:
       );
     case 'probe':
       return L(0, 0, 0, -18) + `<polygon class="probe" points="0,-18 -12,-30 -12,-44 12,-44 12,-30"/>`;
+    case 'psu':
+      return (
+        L(0, -40, 0, -24) +
+        L(0, 24, 0, 40) +
+        `<rect class="bg" x="-22" y="-24" width="44" height="48" rx="5"/>` +
+        L(-10, -8, 10, -8, ' class="plate"') +
+        L(-5, 0, 5, 0, ' class="plate thick"') +
+        T(0, 18, 'DC', ' class="sym-text tiny"') +
+        T(-14, -12, '+', ' class="sym-text small"')
+      );
+    case 'ldr':
+      return leads() + resistorBody(std) + lightIn(-2, -12);
+    case 'photodiode':
+      return diodeBody(L(10, -10, 10, 10, ' class="plate"')) + lightIn(0, -10);
+    case 'transformer':
+      return (
+        P('M-40 -40 H-14 V-24', ' fill="none"') +
+        P('M-40 40 H-14 V24', ' fill="none"') +
+        P('M-14 -24 a6 6 0 0 0 0 12 a6 6 0 0 0 0 12 a6 6 0 0 0 0 12 a6 6 0 0 0 0 12', ' fill="none"') +
+        P('M40 -40 H14 V-24', ' fill="none"') +
+        P('M40 40 H14 V24', ' fill="none"') +
+        P('M14 -24 a6 6 0 0 1 0 12 a6 6 0 0 1 0 12 a6 6 0 0 1 0 12 a6 6 0 0 1 0 12', ' fill="none"') +
+        L(-3, -28, -3, 28) +
+        L(3, -28, 3, 28) +
+        C(-22, -30, 2.5, ' class="fill"') +
+        C(22, -30, 2.5, ' class="fill"')
+      );
+    case 'scr':
+      return diodeBody(L(10, -10, 10, 10, ' class="plate"')) + P('M10 5 L20 20 V40', ' fill="none"');
+    case 'triac':
+      return (
+        L(-40, 0, -10, 0) +
+        L(10, 0, 40, 0) +
+        L(-10, -15, -10, 15, ' class="plate"') +
+        L(10, -15, 10, 15, ' class="plate"') +
+        `<polygon class="fill" points="-10,-14 -10,-1 10,-7.5"/>` +
+        `<polygon class="fill" points="10,1 10,14 -10,7.5"/>` +
+        P('M10 10 L20 22 V40', ' fill="none"')
+      );
+    case 'sevenseg': {
+      const color = LED_COLORS[String(params.color)]?.hex ?? '#ff3b30';
+      let out = `<rect class="segbody" x="-20" y="-70" width="60" height="140" rx="5"/>`;
+      'abcdefg'.split('').forEach((c, i) => {
+        const y = -60 + 20 * i;
+        out += L(-40, y, -20, y) + T(-30, y - 3, c, ' class="sym-text tiny"');
+        const [x, sy, w, h] = SEG_SHAPES[c];
+        out += `<rect class="seg" data-seg="${c}" x="${x + 2}" y="${sy}" width="${w}" height="${h}" rx="2" fill="${color}"/>`;
+      });
+      return out + L(0, 70, 0, 100) + T(12, 90, 'K', ' class="sym-text tiny"');
+    }
+    case 'timer555':
+      return (
+        L(-20, -80, -20, -60) +
+        L(20, -80, 20, -60) +
+        L(-60, -40, -40, -40) +
+        L(-60, 0, -40, 0) +
+        L(-60, 40, -40, 40) +
+        L(0, 60, 0, 80) +
+        L(40, 0, 60, 0) +
+        L(40, 40, 60, 40) +
+        icBox(-40, -60, 80, 120, '555') +
+        T(-20, -46, 'VCC', ' class="sym-text pin"') +
+        T(20, -46, 'RST', ' class="sym-text pin"') +
+        T(-26, -36, 'DIS', ' class="sym-text pin"') +
+        T(-26, 4, 'THR', ' class="sym-text pin"') +
+        T(-26, 44, 'TRG', ' class="sym-text pin"') +
+        T(0, 54, 'GND', ' class="sym-text pin"') +
+        T(26, 4, 'OUT', ' class="sym-text pin"') +
+        T(28, 44, 'CV', ' class="sym-text pin"')
+      );
+    case 'dff':
+      return (
+        L(-40, -20, -24, -20) +
+        L(-40, 20, -24, 20) +
+        L(24, -20, 40, -20) +
+        L(24, 20, 40, 20) +
+        `<rect class="bg ic" x="-24" y="-30" width="48" height="60" rx="3"/>` +
+        clockMark(-24, 20) +
+        T(-15, -16, 'D', ' class="sym-text tiny"') +
+        T(15, -16, 'Q', ' class="sym-text tiny"') +
+        qBar(15, 24)
+      );
+    case 'jkff':
+      return (
+        L(-40, -20, -24, -20) +
+        L(-40, 0, -24, 0) +
+        L(-40, 20, -24, 20) +
+        L(24, -20, 40, -20) +
+        L(24, 20, 40, 20) +
+        `<rect class="bg ic" x="-24" y="-30" width="48" height="60" rx="3"/>` +
+        clockMark(-24, 0) +
+        T(-15, -16, 'J', ' class="sym-text tiny"') +
+        T(-15, 24, 'K', ' class="sym-text tiny"') +
+        T(15, -16, 'Q', ' class="sym-text tiny"') +
+        qBar(15, 24)
+      );
+    case 'counter': {
+      let out = L(-60, -40, -40, -40) + L(-60, 40, -40, 40) + icBox(-40, -52, 80, 104, params.mod === '16' ? 'CTR16' : 'CTR10');
+      out += clockMark(-40, -40) + T(-26, 44, 'R', ' class="sym-text pin"');
+      ['QA', 'QB', 'QC', 'QD'].forEach((q, i) => {
+        const y = -40 + 20 * i;
+        out += L(40, y, 60, y) + T(31, y + 4, q, ' class="sym-text pin"');
+      });
+      return out;
+    }
+    case 'bcd7': {
+      let out = icBox(-40, -72, 80, 144, 'BCD/7');
+      'ABCD'.split('').forEach((c, i) => {
+        const y = -40 + 20 * i;
+        out += L(-60, y, -40, y) + T(-32, y + 4, c, ' class="sym-text pin"');
+      });
+      'abcdefg'.split('').forEach((c, i) => {
+        const y = -60 + 20 * i;
+        out += L(40, y, 60, y) + T(32, y + 4, c, ' class="sym-text pin"');
+      });
+      return out;
+    }
+    case 'multimeter':
+      return (
+        `<rect class="dmm" x="-30" y="-44" width="60" height="74" rx="8"/>` +
+        C(0, 10, 9, ' class="dmmdial"') +
+        L(0, 10, 6, 3, ' stroke-width="2"') +
+        C(-20, 24, 3.5, ' class="jack-com"') +
+        C(20, 24, 3.5, ' class="jack-red"') +
+        L(-20, 28, -20, 60, ' class="lead-com"') +
+        L(20, 28, 20, 60, ' class="lead-red"')
+      );
+    case 'bode':
+      return (
+        `<rect class="bg" x="-34" y="-28" width="68" height="56" rx="6"/>` +
+        P('M-26 -12 H-4 Q6 -12 12 0 T26 14', ' fill="none" class="bodecurve"') +
+        L(-20, 28, -20, 40) +
+        L(20, 28, 20, 40) +
+        T(-20, 22, 'IN', ' class="sym-text pin"') +
+        T(20, 22, 'OUT', ' class="sym-text pin"')
+      );
     default:
       return `<rect x="-20" y="-20" width="40" height="40"/>`;
   }

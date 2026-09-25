@@ -220,13 +220,30 @@ export class App {
 
   // ------------------------------------------------------------ simulation
 
+  /**
+   * Time step: 10 µs normally, smaller when a source runs fast (at least 50 steps per cycle),
+   * so a 5 kHz carrier still looks like a sine wave.
+   */
+  private chooseDt(): number {
+    let fmax = 0;
+    for (const p of this.doc.parts) {
+      if (p.type !== 'ac' && p.type !== 'funcgen') continue;
+      const f = Number(p.params.f) || 0;
+      const extra = p.params.wave === 'fm' ? Number(p.params.dev) || 0 : 0;
+      fmax = Math.max(fmax, f + extra);
+    }
+    if (fmax <= 0) return 1e-5;
+    return Math.min(1e-5, Math.max(2e-7, 1 / (fmax * 50)));
+  }
+
   private syncEngine(): void {
-    const key = topologyKey(this.doc);
+    const dt = this.chooseDt();
+    const key = `${topologyKey(this.doc)}|${dt}`;
     if (key !== this.topo || !this.engine) {
       const state = this.engine?.exportState();
       const t0 = this.engine?.t ?? 0;
       this.topo = key;
-      this.engine = new Engine(this.doc, 1e-5, new Set(this.broken.keys()));
+      this.engine = new Engine(this.doc, dt, new Set(this.broken.keys()));
       if (state) this.engine.importState(state, t0);
     } else {
       this.engine.syncParts(this.doc);
@@ -243,8 +260,9 @@ export class App {
   /** Start again from t = 0: capacitors empty, damaged parts replaced. */
   restart(): void {
     this.broken.clear();
-    this.engine = new Engine(this.doc, 1e-5);
-    this.topo = topologyKey(this.doc);
+    const dt = this.chooseDt();
+    this.engine = new Engine(this.doc, dt);
+    this.topo = `${topologyKey(this.doc)}|${dt}`;
     this.stepDebt = 0;
     this.stepHooks.forEach((h) => h(this.engine));
     this.refreshNotes();

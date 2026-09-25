@@ -1,7 +1,7 @@
 import { fmtShort } from '../units';
 import { rotatePt, type ParamValue, type Part, type Pt } from './types';
 
-export type Category = 'sources' | 'basic' | 'semis' | 'output' | 'logic' | 'meters';
+export type Category = 'sources' | 'basic' | 'semis' | 'output' | 'logic' | 'ics' | 'meters';
 
 export interface Bilingual {
   ar: string;
@@ -17,6 +17,8 @@ export interface ParamDef extends Bilingual {
   min?: number;
   max?: number;
   step?: number;
+  /** Only show this field when another parameter has one of these values. */
+  showIf?: { key: string; values: string[] };
 }
 
 export interface PinDef extends Bilingual {
@@ -40,6 +42,10 @@ export interface PartDef extends Bilingual {
   /** toggle: a click flips it. momentary: closed only while pressed. */
   interactive?: 'toggle' | 'momentary';
   desc: Bilingual;
+  /** Pins that may be left unconnected without a warning (e.g. 555 RESET and CTRL). */
+  optional?: number[];
+  /** Extra hidden nodes the simulator needs inside the part (e.g. LED + resistor per segment). */
+  internalNodes?: number;
   /** Short value shown under the label on the board. */
   valueText?: (p: Record<string, ParamValue>) => string;
 }
@@ -127,6 +133,25 @@ export const PARTS: PartDef[] = [
     valueText: (p) => fmtShort(num(p, 'V'), 'V'),
   },
   {
+    type: 'psu',
+    ar: 'مجهز قدرة مستمر',
+    en: 'DC power supply',
+    cat: 'sources',
+    prefix: 'PS',
+    pins: vertical(),
+    params: [
+      { key: 'V', ar: 'الجهد (0–30V)', en: 'Voltage (0–30 V)', unit: 'V', def: 12, min: 0, max: 30 },
+      { key: 'Ilim', ar: 'حد التيار', en: 'Current limit', unit: 'A', def: 1, min: 0.001, max: 3 },
+    ],
+    box: { x: -26, y: -40, w: 52, h: 80 },
+    labelAt: { x: 40, y: -8 },
+    desc: {
+      ar: 'مثل مجهز القدرة في الورشة: تضبط الجهد وحد التيار. إذا زاد الحمل يتحول إلى وضع ثبات التيار CC.',
+      en: 'Set the voltage and a current limit. Overloaded, it switches to constant-current (CC) mode.',
+    },
+    valueText: (p) => fmtShort(num(p, 'V'), 'V'),
+  },
+  {
     type: 'ac',
     ar: 'مصدر متناوب',
     en: 'AC source',
@@ -165,10 +190,18 @@ export const PARTS: PartDef[] = [
           { v: 'sine', ar: 'جيبية', en: 'Sine' },
           { v: 'square', ar: 'مربعة', en: 'Square' },
           { v: 'triangle', ar: 'مثلثية', en: 'Triangle' },
+          { v: 'pulse', ar: 'نبضات (0 إلى القيمة العظمى)', en: 'Pulse (0 to peak)' },
+          { v: 'am', ar: 'تضمين سعوي AM', en: 'AM' },
+          { v: 'fm', ar: 'تضمين ترددي FM', en: 'FM' },
+          { v: 'pwm', ar: 'تضمين عرض النبضة PWM', en: 'PWM' },
         ],
       },
       { key: 'Vp', ar: 'السعة (القيمة العظمى)', en: 'Amplitude (peak)', unit: 'V', def: 2 },
-      { key: 'f', ar: 'التردد', en: 'Frequency', unit: 'Hz', def: 100, min: 0.01 },
+      { key: 'f', ar: 'التردد (الحامل)', en: 'Frequency (carrier)', unit: 'Hz', def: 100, min: 0.01 },
+      { key: 'duty', ar: 'نسبة التشغيل', en: 'Duty cycle', unit: '%', def: 0.5, kind: 'slider', min: 0.02, max: 0.98, step: 0.01, showIf: { key: 'wave', values: ['pulse'] } },
+      { key: 'fm', ar: 'تردد الإشارة المُضمِّنة', en: 'Modulating frequency', unit: 'Hz', def: 100, min: 0.01, showIf: { key: 'wave', values: ['am', 'fm', 'pwm'] } },
+      { key: 'm', ar: 'معامل التضمين', en: 'Modulation index', unit: '%', def: 0.5, kind: 'slider', min: 0, max: 1, step: 0.01, showIf: { key: 'wave', values: ['am'] } },
+      { key: 'dev', ar: 'الانحراف الترددي', en: 'Frequency deviation', unit: 'Hz', def: 50, min: 0, showIf: { key: 'wave', values: ['fm'] } },
       { key: 'offset', ar: 'الإزاحة المستمرة', en: 'DC offset', unit: 'V', def: 0 },
       { key: 'r', ar: 'مقاومة المخرج', en: 'Output resistance', unit: 'Ω', def: 50, min: 0.001 },
     ],
@@ -274,6 +307,47 @@ export const PARTS: PartDef[] = [
     labelAt: { x: 0, y: -24 },
     desc: { ar: 'يقاوم التغير في التيار.', en: 'Opposes changes in current.' },
     valueText: (p) => fmtShort(num(p, 'L'), 'H'),
+  },
+  {
+    type: 'ldr',
+    ar: 'مقاومة ضوئية LDR',
+    en: 'Light-dependent resistor',
+    cat: 'basic',
+    prefix: 'LDR',
+    pins: two(),
+    params: [
+      { key: 'light', ar: 'شدة الضوء', en: 'Light level', unit: '%', def: 0.5, kind: 'slider', min: 0, max: 1, step: 0.01 },
+      { key: 'Rdark', ar: 'المقاومة في الظلام', en: 'Dark resistance', unit: 'Ω', def: 1e6, min: 1 },
+      { key: 'Rlight', ar: 'المقاومة في الضوء الكامل', en: 'Resistance in full light', unit: 'Ω', def: 500, min: 1 },
+    ],
+    box: { x: -40, y: -32, w: 80, h: 46 },
+    labelAt: { x: 0, y: 24 },
+    desc: { ar: 'تقل مقاومتها كلما زاد الضوء. حرّك شريط «شدة الضوء».', en: 'Resistance falls as light increases.' },
+    valueText: (p) => `☀ ${Math.round(num(p, 'light') * 100)}%`,
+  },
+  {
+    type: 'transformer',
+    ar: 'محولة',
+    en: 'Transformer',
+    cat: 'basic',
+    prefix: 'T',
+    pins: [
+      { x: -40, y: -40, ar: 'الابتدائي 1', en: 'Primary 1' },
+      { x: -40, y: 40, ar: 'الابتدائي 2', en: 'Primary 2' },
+      { x: 40, y: -40, ar: 'الثانوي 1', en: 'Secondary 1' },
+      { x: 40, y: 40, ar: 'الثانوي 2', en: 'Secondary 2' },
+    ],
+    params: [
+      { key: 'n', ar: 'نسبة اللفات N1:N2', en: 'Turns ratio N1:N2', unit: '', def: 10, min: 0.01 },
+      { key: 'L1', ar: 'محاثة الملف الابتدائي', en: 'Primary inductance', unit: 'H', def: 10, min: 1e-6 },
+    ],
+    box: { x: -40, y: -46, w: 80, h: 92 },
+    labelAt: { x: 0, y: -54 },
+    desc: {
+      ar: 'جهد الثانوي = جهد الابتدائي ÷ نسبة اللفات. تعمل على التيار المتناوب فقط.',
+      en: 'Secondary voltage = primary voltage ÷ turns ratio. Works on AC only.',
+    },
+    valueText: (p) => `${num(p, 'n')}:1`,
   },
   {
     type: 'switch',
@@ -395,6 +469,71 @@ export const PARTS: PartDef[] = [
     valueText: (p) => LED_COLORS[String(p.color)]?.ar ?? '',
   },
   {
+    type: 'photodiode',
+    ar: 'ثنائي حساس للضوء',
+    en: 'Photodiode',
+    cat: 'semis',
+    prefix: 'D',
+    pins: two({ ar: 'الأنود A', en: 'Anode' }, { ar: 'الكاثود K', en: 'Cathode' }),
+    params: [
+      { key: 'light', ar: 'شدة الضوء', en: 'Light level', unit: '%', def: 0.5, kind: 'slider', min: 0, max: 1, step: 0.01 },
+      { key: 'Isc', ar: 'تيار الضوء الكامل', en: 'Full-light current', unit: 'A', def: 100e-6, min: 1e-9 },
+    ],
+    box: { x: -40, y: -32, w: 80, h: 46 },
+    labelAt: { x: 0, y: 24 },
+    desc: {
+      ar: 'يوصل بانحياز عكسي، ويمر فيه تيار عكسي يزيد مع شدة الضوء.',
+      en: 'Used reverse-biased; its reverse current grows with light.',
+    },
+    valueText: (p) => `☀ ${Math.round(num(p, 'light') * 100)}%`,
+  },
+  {
+    type: 'scr',
+    ar: 'ثايرستور SCR',
+    en: 'Thyristor (SCR)',
+    cat: 'semis',
+    prefix: 'SCR',
+    pins: [
+      { x: -40, y: 0, ar: 'الأنود A', en: 'Anode' },
+      { x: 40, y: 0, ar: 'الكاثود K', en: 'Cathode' },
+      { x: 20, y: 40, ar: 'البوابة G', en: 'Gate' },
+    ],
+    params: [
+      { key: 'Igt', ar: 'تيار القدح', en: 'Gate trigger current', unit: 'A', def: 0.001, min: 1e-6 },
+      { key: 'Ih', ar: 'تيار المسك', en: 'Holding current', unit: 'A', def: 0.005, min: 1e-6 },
+    ],
+    box: { x: -40, y: -16, w: 80, h: 60 },
+    labelAt: { x: 0, y: -24 },
+    desc: {
+      ar: 'نبضة على البوابة تجعله يوصل، ويبقى موصلاً حتى يقل التيار عن تيار المسك.',
+      en: 'A gate pulse turns it on; it stays on until the current falls below the holding current.',
+    },
+    valueText: () => 'SCR',
+  },
+  {
+    type: 'triac',
+    ar: 'ترياك',
+    en: 'Triac',
+    cat: 'semis',
+    prefix: 'TR',
+    pins: [
+      { x: -40, y: 0, ar: 'الطرف MT2', en: 'MT2' },
+      { x: 40, y: 0, ar: 'الطرف MT1', en: 'MT1' },
+      { x: 20, y: 40, ar: 'البوابة G', en: 'Gate' },
+    ],
+    params: [
+      { key: 'Igt', ar: 'تيار القدح', en: 'Gate trigger current', unit: 'A', def: 0.005, min: 1e-6 },
+      { key: 'Ih', ar: 'تيار المسك', en: 'Holding current', unit: 'A', def: 0.01, min: 1e-6 },
+    ],
+    box: { x: -40, y: -20, w: 80, h: 64 },
+    labelAt: { x: 0, y: -28 },
+    desc: {
+      ar: 'مثل ثايرستورين متعاكسين: يوصل في الاتجاهين، ويستخدم للتحكم بالتيار المتناوب.',
+      en: 'Like two opposed SCRs: conducts both ways, used to control AC.',
+    },
+    valueText: () => 'TRIAC',
+  },
+  {
     type: 'npn',
     ar: 'ترانزستور NPN',
     en: 'NPN transistor',
@@ -477,6 +616,43 @@ export const PARTS: PartDef[] = [
     valueText: (p) => `${fmtShort(num(p, 'V'), 'V')} ${fmtShort(num(p, 'P'), 'W')}`,
   },
 
+  {
+    type: 'sevenseg',
+    ar: 'عارضة القطع السبع',
+    en: '7-segment display',
+    cat: 'output',
+    prefix: 'DS',
+    pins: [
+      { x: -40, y: -60, ar: 'القطعة a', en: 'Segment a' },
+      { x: -40, y: -40, ar: 'القطعة b', en: 'Segment b' },
+      { x: -40, y: -20, ar: 'القطعة c', en: 'Segment c' },
+      { x: -40, y: 0, ar: 'القطعة d', en: 'Segment d' },
+      { x: -40, y: 20, ar: 'القطعة e', en: 'Segment e' },
+      { x: -40, y: 40, ar: 'القطعة f', en: 'Segment f' },
+      { x: -40, y: 60, ar: 'القطعة g', en: 'Segment g' },
+      { x: 0, y: 100, ar: 'المشترك (كاثود)', en: 'Common cathode' },
+    ],
+    params: [
+      {
+        key: 'color',
+        ar: 'اللون',
+        en: 'Colour',
+        unit: '',
+        def: 'red',
+        kind: 'select',
+        options: Object.entries(LED_COLORS).map(([v, c]) => ({ v, ar: c.ar, en: c.en })),
+      },
+      { key: 'Rs', ar: 'مقاومة داخلية لكل قطعة', en: 'Built-in resistor per segment', unit: 'Ω', def: 330, min: 0.001 },
+    ],
+    box: { x: -40, y: -74, w: 84, h: 178 },
+    labelAt: { x: 0, y: -82 },
+    internalNodes: 7,
+    desc: {
+      ar: 'سبعة ثنائيات ضوئية على شكل الرقم 8، كاثودها مشترك. لكل قطعة مقاومة داخلية.',
+      en: 'Seven LEDs shaped like an 8 with a common cathode, each with a built-in resistor.',
+    },
+  },
+
   // ---------- Logic ----------
   gate('and', 'بوابة AND', 'AND gate', 'المخرج 1 فقط إذا كان المدخلان 1.', 'Output is 1 only when both inputs are 1.'),
   gate('or', 'بوابة OR', 'OR gate', 'المخرج 1 إذا كان أي مدخل 1.', 'Output is 1 when any input is 1.'),
@@ -526,7 +702,192 @@ export const PARTS: PartDef[] = [
     desc: { ar: 'يضيء ويظهر 1 عندما يكون المدخل عالياً.', en: 'Shows 1 when its input is high.' },
   },
 
+  // ---------- Integrated circuits ----------
+  {
+    type: 'timer555',
+    ar: 'المؤقت 555',
+    en: '555 timer',
+    cat: 'ics',
+    prefix: 'U',
+    pins: [
+      { x: -20, y: -80, ar: '8 · التغذية VCC', en: '8 · VCC' },
+      { x: 20, y: -80, ar: '4 · إعادة الضبط RESET', en: '4 · RESET' },
+      { x: -60, y: -40, ar: '7 · التفريغ DIS', en: '7 · DISCHARGE' },
+      { x: -60, y: 0, ar: '6 · العتبة THR', en: '6 · THRESHOLD' },
+      { x: -60, y: 40, ar: '2 · القدح TRIG', en: '2 · TRIGGER' },
+      { x: 0, y: 80, ar: '1 · الأرضي GND', en: '1 · GND' },
+      { x: 60, y: 0, ar: '3 · المخرج OUT', en: '3 · OUTPUT' },
+      { x: 60, y: 40, ar: '5 · السيطرة CTRL', en: '5 · CONTROL' },
+    ],
+    params: [],
+    box: { x: -60, y: -80, w: 120, h: 160 },
+    labelAt: { x: 0, y: -90 },
+    optional: [1, 7],
+    desc: {
+      ar: 'يولد نبضات. متعدد اهتزاز حر: f ≈ 1.44 ÷ ((R1 + 2R2) × C).',
+      en: 'Makes pulses. Astable: f ≈ 1.44 ÷ ((R1 + 2R2) × C).',
+    },
+    valueText: () => 'NE555',
+  },
+  {
+    type: 'dff',
+    ar: 'قلاب D',
+    en: 'D flip-flop',
+    cat: 'ics',
+    prefix: 'U',
+    pins: [
+      { x: -40, y: -20, ar: 'المدخل D', en: 'D' },
+      { x: -40, y: 20, ar: 'نبضة الساعة CLK', en: 'Clock' },
+      { x: 40, y: -20, ar: 'المخرج Q', en: 'Q' },
+      { x: 40, y: 20, ar: 'المخرج المعكوس Q̄', en: 'Q̄' },
+    ],
+    params: [],
+    box: { x: -40, y: -34, w: 80, h: 68 },
+    labelAt: { x: 0, y: -42 },
+    desc: { ar: 'عند صعود نبضة الساعة ينتقل D إلى Q ويبقى محفوظاً.', en: 'On a rising clock edge, Q takes the value of D.' },
+  },
+  {
+    type: 'jkff',
+    ar: 'قلاب JK',
+    en: 'JK flip-flop',
+    cat: 'ics',
+    prefix: 'U',
+    pins: [
+      { x: -40, y: -20, ar: 'المدخل J', en: 'J' },
+      { x: -40, y: 0, ar: 'نبضة الساعة CLK', en: 'Clock' },
+      { x: -40, y: 20, ar: 'المدخل K', en: 'K' },
+      { x: 40, y: -20, ar: 'المخرج Q', en: 'Q' },
+      { x: 40, y: 20, ar: 'المخرج المعكوس Q̄', en: 'Q̄' },
+    ],
+    params: [],
+    box: { x: -40, y: -34, w: 80, h: 68 },
+    labelAt: { x: 0, y: -42 },
+    desc: {
+      ar: 'J=1 يضبط، K=1 يمسح، J=K=1 يقلب الحالة عند كل نبضة ساعة.',
+      en: 'J sets, K resets, J=K=1 toggles on each clock edge.',
+    },
+  },
+  {
+    type: 'counter',
+    ar: 'عداد عشري',
+    en: 'Decade counter',
+    cat: 'ics',
+    prefix: 'U',
+    pins: [
+      { x: -60, y: -40, ar: 'نبضة الساعة CLK', en: 'Clock' },
+      { x: -60, y: 40, ar: 'التصفير RESET', en: 'Reset' },
+      { x: 60, y: -40, ar: 'المخرج QA (1)', en: 'QA (1)' },
+      { x: 60, y: -20, ar: 'المخرج QB (2)', en: 'QB (2)' },
+      { x: 60, y: 0, ar: 'المخرج QC (4)', en: 'QC (4)' },
+      { x: 60, y: 20, ar: 'المخرج QD (8)', en: 'QD (8)' },
+    ],
+    params: [
+      {
+        key: 'mod',
+        ar: 'يعد حتى',
+        en: 'Counts to',
+        unit: '',
+        def: '10',
+        kind: 'select',
+        options: [
+          { v: '10', ar: '9 ثم يرجع 0 (عشري)', en: '9 then 0 (decade)' },
+          { v: '16', ar: '15 ثم يرجع 0 (ثنائي)', en: '15 then 0 (binary)' },
+        ],
+      },
+    ],
+    box: { x: -60, y: -54, w: 120, h: 108 },
+    labelAt: { x: 0, y: -62 },
+    optional: [1],
+    desc: { ar: 'يزيد العدد بواحد مع كل نبضة ساعة ويخرجه بالنظام الثنائي.', en: 'Adds one on each clock pulse; outputs the count in binary.' },
+    valueText: (p) => (p.mod === '16' ? '0–15' : '0–9'),
+  },
+  {
+    type: 'bcd7',
+    ar: 'مفكك BCD للقطع السبع',
+    en: 'BCD to 7-segment decoder',
+    cat: 'ics',
+    prefix: 'U',
+    pins: [
+      { x: -60, y: -40, ar: 'المدخل A', en: 'Input A' },
+      { x: -60, y: -20, ar: 'المدخل B', en: 'Input B' },
+      { x: -60, y: 0, ar: 'المدخل C', en: 'Input C' },
+      { x: -60, y: 20, ar: 'المدخل D', en: 'Input D' },
+      { x: 60, y: -60, ar: 'المخرج a', en: 'Output a' },
+      { x: 60, y: -40, ar: 'المخرج b', en: 'Output b' },
+      { x: 60, y: -20, ar: 'المخرج c', en: 'Output c' },
+      { x: 60, y: 0, ar: 'المخرج d', en: 'Output d' },
+      { x: 60, y: 20, ar: 'المخرج e', en: 'Output e' },
+      { x: 60, y: 40, ar: 'المخرج f', en: 'Output f' },
+      { x: 60, y: 60, ar: 'المخرج g', en: 'Output g' },
+    ],
+    params: [],
+    box: { x: -60, y: -74, w: 120, h: 148 },
+    labelAt: { x: 0, y: -82 },
+    desc: {
+      ar: 'يحول الرقم الثنائي (A=1، B=2، C=4، D=8) إلى إشارات القطع السبع a إلى g.',
+      en: 'Turns a binary number (A=1, B=2, C=4, D=8) into segment signals a–g.',
+    },
+    valueText: () => '7448',
+  },
+
   // ---------- Meters ----------
+  {
+    type: 'multimeter',
+    ar: 'أفوميتر رقمي',
+    en: 'Digital multimeter',
+    cat: 'meters',
+    prefix: 'XMM',
+    pins: [
+      { x: 20, y: 60, ar: 'الطرف الأحمر (V Ω A)', en: 'Red lead (V Ω A)' },
+      { x: -20, y: 60, ar: 'الطرف الأسود COM', en: 'Black lead COM' },
+    ],
+    params: [
+      {
+        key: 'mode',
+        ar: 'مفتاح الاختيار',
+        en: 'Selector',
+        unit: '',
+        def: 'vdc',
+        kind: 'select',
+        options: [
+          { v: 'vdc', ar: 'فولت مستمر V⎓', en: 'DC volts V⎓' },
+          { v: 'vac', ar: 'فولت متناوب V~', en: 'AC volts V~' },
+          { v: 'adc', ar: 'أمبير مستمر A⎓', en: 'DC amps A⎓' },
+          { v: 'aac', ar: 'أمبير متناوب A~', en: 'AC amps A~' },
+          { v: 'ohm', ar: 'أوم Ω (افصل المصدر أولاً)', en: 'Ohms Ω (power off first)' },
+          { v: 'diode', ar: 'فحص الثنائي ▶|', en: 'Diode test ▶|' },
+        ],
+      },
+    ],
+    box: { x: -32, y: -46, w: 64, h: 106 },
+    labelAt: { x: 0, y: -54 },
+    readoutAt: { x: 0, y: -26 },
+    desc: {
+      ar: 'جهاز القياس المتعدد: يقيس الجهد والتيار والمقاومة ويفحص الثنائي. غيّر وضعه من «مفتاح الاختيار».',
+      en: 'Measures volts, amps and ohms and tests diodes. Change the selector to switch.',
+    },
+  },
+  {
+    type: 'bode',
+    ar: 'راسم بودي',
+    en: 'Bode plotter',
+    cat: 'meters',
+    prefix: 'XBP',
+    pins: [
+      { x: -20, y: 40, ar: 'الدخل IN', en: 'Input' },
+      { x: 20, y: 40, ar: 'الخرج OUT', en: 'Output' },
+    ],
+    params: [
+      { key: 'fmin', ar: 'أقل تردد', en: 'Start frequency', unit: 'Hz', def: 1, min: 0.001 },
+      { key: 'fmax', ar: 'أعلى تردد', en: 'End frequency', unit: 'Hz', def: 100000, min: 0.01 },
+    ],
+    box: { x: -36, y: -30, w: 72, h: 74 },
+    labelAt: { x: 0, y: -38 },
+    desc: {
+      ar: 'يرسم استجابة الدائرة للتردد (الكسب والطور) ويحسب تردد القطع. يحتاج مولد إشارة أو مصدراً متناوباً في الدائرة.',
+      en: 'Plots gain and phase against frequency and finds the cut-off. Needs a signal source in the circuit.',
+    },
+  },
   {
     type: 'voltmeter',
     ar: 'فولتميتر',
@@ -600,6 +961,7 @@ export const CATEGORIES: ({ id: Category } & Bilingual)[] = [
   { id: 'semis', ar: 'أشباه الموصلات', en: 'Semiconductors' },
   { id: 'output', ar: 'الإخراج', en: 'Output' },
   { id: 'logic', ar: 'البوابات المنطقية', en: 'Logic' },
+  { id: 'ics', ar: 'الدوائر المتكاملة', en: 'Integrated circuits' },
   { id: 'meters', ar: 'أجهزة القياس', en: 'Instruments' },
 ];
 

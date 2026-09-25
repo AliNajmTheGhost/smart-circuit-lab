@@ -9,6 +9,8 @@ export interface LessonCtx {
   reading(p: Part): { v: number; i: number; p: number; extra: Record<string, number> } | null;
   broken(p: Part): boolean;
   num(p: Part, key: string): number;
+  /** True while the oscilloscope / Bode panel is open. */
+  scopeOpen: boolean;
 }
 
 export interface LessonStep extends Bilingual {
@@ -30,6 +32,11 @@ export interface Lesson extends Bilingual {
 
 const P = (x: number, y: number) => ({ x, y });
 const near = (v: number, want: number, tol: number) => Math.abs(v - want) <= tol;
+const extra = (c: LessonCtx, type: string, key: string) => {
+  const p = c.parts(type)[0];
+  return p ? (c.reading(p)?.extra[key] ?? NaN) : NaN;
+};
+const example = (id: string) => EXAMPLES.find((e) => e.id === id)!;
 const meter = (c: LessonCtx, type: string) => {
   const m = c.parts(type)[0];
   return m ? (c.reading(m)?.extra.reading ?? NaN) : NaN;
@@ -41,6 +48,7 @@ export function lessonCtx(app: App): LessonCtx {
     reading: (p) => app.engine.reading(p.id),
     broken: (p) => app.broken.has(p.id),
     num: (p, key) => Number(p.params[key]),
+    scopeOpen: app.scopeOpen,
   };
 }
 
@@ -189,6 +197,134 @@ export const LESSONS: Lesson[] = [
       {
         ar: 'بوابة AND تعطي 1 فقط عندما يكون المدخلان 1. جرّب استبدالها ببوابة OR ثم XOR وقارن جداول الحقيقة.',
         en: 'AND gives 1 only when both inputs are 1. Try OR and XOR and compare.',
+      },
+    ],
+  },
+  {
+    id: 'ohmmeter',
+    grade: 1,
+    ref: '7–9',
+    ar: 'قياس المقاومة بالأفوميتر',
+    en: 'Measuring resistance',
+    goal: { ar: 'قراءة المقاومة المكافئة لمقاومتين على التوالي، ومعرفة وضع فحص الثنائي.', en: 'Read series resistance and try the diode-test position.' },
+    build: () => example('ohmmeter').build(),
+    steps: [
+      {
+        ar: 'الأفوميتر على وضع الأوم وموصول على طرفي المقاومتين R1 و R2 الموصولتين على التوالي. اقرأ الشاشة: هل تساوي R1 + R2 = 1k + 2.2k = 3.2kΩ؟',
+        en: 'The meter is on ohms across R1 and R2 in series. Does it read 1k + 2.2k = 3.2 kΩ?',
+        check: (c) => near(extra(c, 'multimeter', 'reading'), 3200, 60),
+      },
+      {
+        ar: 'غيّر R2 إلى 4.7k. احسب المجموع في دفترك أولاً، ثم تحقق من الشاشة.',
+        en: 'Change R2 to 4.7k. Work out the total first, then check the display.',
+        check: (c) => near(extra(c, 'multimeter', 'reading'), 5700, 100),
+      },
+      {
+        ar: 'تذكّر: لا تقس المقاومة والدائرة موصولة بالمصدر. الآن حوّل «مفتاح الاختيار» إلى «فحص الثنائي». تظهر OL لأن المقاومات لا توصل مثل الثنائي.',
+        en: 'Never measure ohms on a powered circuit. Now switch to diode test: it shows OL for resistors.',
+        check: (c) => c.parts('multimeter').some((m) => m.params.mode === 'diode'),
+      },
+    ],
+  },
+  {
+    id: 'transformer',
+    grade: 1,
+    ref: '17',
+    ar: 'المحولة الكهربائية',
+    en: 'The transformer',
+    goal: { ar: 'التحقق من أن جهد الثانوي = جهد الابتدائي ÷ نسبة اللفات.', en: 'Check that secondary voltage = primary ÷ turns ratio.' },
+    build: () => example('transformer').build(),
+    steps: [
+      {
+        ar: 'المصدر 220V فعّال ونسبة اللفات 18.3:1. الأفوميتر على وضع V~ على الثانوي. هل يقرأ 220 ÷ 18.3 ≈ 12V؟',
+        en: 'Mains 220 V RMS, ratio 18.3:1. Does the meter (V~) read 220 ÷ 18.3 ≈ 12 V?',
+        check: (c) => near(extra(c, 'multimeter', 'reading'), 12, 1),
+      },
+      {
+        ar: 'غيّر نسبة اللفات في المحولة T1 إلى 9.2. كم يصبح جهد الثانوي؟ وماذا يحدث للمصباح المصمم لـ 12V؟',
+        en: 'Change T1’s ratio to 9.2. What is the secondary voltage now, and what happens to the 12 V lamp?',
+        check: (c) => c.parts('transformer').some((t) => near(c.num(t, 'n'), 9.2, 0.05)) && extra(c, 'multimeter', 'reading') > 20,
+      },
+      {
+        ar: 'الجهد تضاعف إلى حوالي 24V فاحترق المصباح. لذلك نختار نسبة اللفات حسب الجهد الذي يحتاجه الحمل.',
+        en: 'About 24 V burned the lamp. Choose the ratio for the voltage the load needs.',
+      },
+    ],
+  },
+  {
+    id: '555',
+    grade: 2,
+    ref: '14',
+    ar: 'المؤقت 555: متعدد الاهتزاز الحر',
+    en: '555 astable multivibrator',
+    goal: { ar: 'مشاهدة شحن المتسعة ونبضات المخرج، وتغيير التردد.', en: 'Watch the capacitor and output pulses, then change the frequency.' },
+    scopeWindow: 0.2,
+    build: () => example('555').build(),
+    steps: [
+      {
+        ar: 'افتح «راسم الإشارة». القناة 1 تظهر جهد المتسعة يصعد وينزل بين ثلث وثلثي جهد التغذية (3V و 6V)، والقناة 2 تظهر النبضات على المخرج التي تومض الثنائي.',
+        en: 'Open the oscilloscope. CH1 shows the capacitor between 1/3 and 2/3 of the supply; CH2 shows the output pulses.',
+        check: (c) => c.scopeOpen,
+      },
+      {
+        ar: 'التردد ≈ 1.44 ÷ ((R1 + 2×R2) × C) ≈ 15Hz. غيّر المتسعة C1 إلى 2.2µ. هل أصبح الوميض أبطأ؟',
+        en: 'f ≈ 1.44 ÷ ((R1 + 2R2) × C) ≈ 15 Hz. Change C1 to 2.2µ. Is the blinking slower?',
+        check: (c) => c.parts('capacitor').some((x) => near(c.num(x, 'C'), 2.2e-6, 1e-8)),
+      },
+      {
+        ar: 'زيادة السعة تزيد زمن الشحن فيقل التردد. جرّب أيضاً تغيير R2.',
+        en: 'More capacitance means longer charging and a lower frequency. Try changing R2 too.',
+      },
+    ],
+  },
+  {
+    id: 'counter',
+    grade: 2,
+    ref: '32',
+    ar: 'العداد وعارضة القطع السبع',
+    en: 'Counter and 7-segment display',
+    goal: { ar: 'فهم العد الثنائي وتحويله إلى رقم على العارضة.', en: 'Understand binary counting and decoding to a digit.' },
+    build: () => example('counter').build(),
+    steps: [
+      {
+        ar: 'كل نبضة من مولد الإشارة تزيد العداد واحداً، والمفكك يحول الرقم الثنائي إلى القطع السبع. انتظر حتى يظهر الرقم 5.',
+        en: 'Each clock pulse adds one; the decoder turns the binary number into segments. Wait for 5.',
+        check: (c) => extra(c, 'counter', 'count') >= 5,
+      },
+      {
+        ar: 'المخارج QA=1 و QB=2 و QC=4 و QD=8. الرقم 5 = 1 + 4، أي QA و QC. اختر العداد U1 وغيّر «يعد حتى» إلى الوضع الثنائي 15. ماذا يظهر على العارضة بعد 9؟',
+        en: 'QA=1, QB=2, QC=4, QD=8, so 5 = QA + QC. Switch the counter to binary (15). What shows after 9?',
+        check: (c) => c.parts('counter').some((x) => x.params.mod === '16'),
+      },
+      {
+        ar: 'المفكك 7448 لا يعرض الأرقام من 10 إلى 15، لذلك تنطفئ العارضة. لهذا نستخدم العداد العشري مع العارضة.',
+        en: 'The decoder cannot show 10–15, so the display goes blank. That is why decade counters are used.',
+      },
+    ],
+  },
+  {
+    id: 'lowpass',
+    grade: 3,
+    ref: '6',
+    ar: 'مرشح إمرار الترددات الواطئة',
+    en: 'Low-pass filter',
+    goal: { ar: 'رسم استجابة المرشح للتردد وإيجاد تردد القطع.', en: 'Plot the frequency response and find the cut-off.' },
+    scopeWindow: 0.002,
+    build: () => example('lowpass').build(),
+    steps: [
+      {
+        ar: 'افتح «راسم الإشارة» واختر تبويب «راسم بودي». المنحني الأصفر هو الكسب: ثابت في الترددات الواطئة ثم يهبط بعد تردد القطع fc = 1 ÷ (2π×R×C) ≈ 1.59kHz.',
+        en: 'Open the panel and pick the Bode tab. Gain is flat, then falls after fc = 1 ÷ (2πRC) ≈ 1.59 kHz.',
+        check: (c) => c.scopeOpen,
+      },
+      {
+        ar: 'غيّر المتسعة C1 إلى 10n. أين أصبح تردد القطع؟ احسبه ثم قارنه بالرقم الظاهر.',
+        en: 'Change C1 to 10n. Where is the cut-off now? Calculate it, then compare.',
+        check: (c) => c.parts('capacitor').some((x) => near(c.num(x, 'C'), 1e-8, 1e-11)),
+      },
+      {
+        ar: 'ارجع إلى تبويب «راسم الإشارة» وغيّر تردد مولد الإشارة إلى 100k: لاحظ أن الإشارة الخارجة (القناة 2) صغرت كثيراً.',
+        en: 'Back on the oscilloscope, set the generator to 100k: the output (CH2) becomes much smaller.',
       },
     ],
   },

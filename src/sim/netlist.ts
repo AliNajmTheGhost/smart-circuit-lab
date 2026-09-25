@@ -54,7 +54,7 @@ class UnionFind {
   }
 }
 
-const NEGATIVE_PIN: Record<string, number> = { battery: 1, ac: 1, funcgen: 1 };
+const NEGATIVE_PIN: Record<string, number> = { battery: 1, psu: 1, ac: 1, funcgen: 1 };
 
 export function buildNetlist(doc: CircuitDoc): Netlist {
   const uf = new UnionFind();

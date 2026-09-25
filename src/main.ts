@@ -25,3 +25,10 @@ const loop = (now: number) => {
   requestAnimationFrame(loop);
 };
 requestAnimationFrame(loop);
+
+// Installable, offline-capable app when served over http(s); the single-file build skips this.
+if (import.meta.env.PROD && import.meta.env.MODE !== 'single' && 'serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {
+    /* offline support is optional */
+  });
+}

@@ -1,4 +1,6 @@
+import { defOf } from '../model/library';
 import type { CircuitDoc } from '../model/types';
+import { AcStamper, solveComplex } from './ac';
 import { createDevice, type Ctx, type Device, type Issue } from './devices';
 import { buildNetlist, wireCurrents, type Netlist } from './netlist';
 import { solve, Stamper } from './stamper';
@@ -35,12 +37,19 @@ export class Engine {
     broken: Set<string> = new Set(),
   ) {
     this.net = buildNetlist(doc);
-    this.n = this.net.nodeCount;
+    // Some parts need hidden nodes of their own (e.g. between each LED segment and its resistor).
+    let next = this.net.nodeCount;
+    const inner = new Map<string, number[]>();
+    for (const p of doc.parts) {
+      const k = defOf(p.type).internalNodes ?? 0;
+      inner.set(p.id, Array.from({ length: k }, () => next++));
+    }
+    this.n = next;
     this.x = new Float64Array(this.n);
     this.guess = new Float64Array(this.n);
     this.s = new Stamper(this.n);
     for (const p of doc.parts) {
-      const d = createDevice(p, this.net.pinNodes.get(p.id)!);
+      const d = createDevice(p, [...this.net.pinNodes.get(p.id)!, ...inner.get(p.id)!]);
       d.broken = broken.has(p.id);
       this.devices.push(d);
       this.byId.set(p.id, d);
@@ -117,6 +126,31 @@ export class Engine {
       }
     }
     return damaged;
+  }
+
+  /**
+   * Frequency response between two nodes, driven by `stimulus` with every other source switched off.
+   * Uses the present operating point for diodes and transistors.
+   */
+  acSweep(stimulus: string, inNode: number, outNode: number, freqs: number[]): { f: number; db: number; phase: number }[] {
+    const out: { f: number; db: number; phase: number }[] = [];
+    if (this.n === 0) return out;
+    for (const f of freqs) {
+      const w = 2 * Math.PI * f;
+      const s = new AcStamper(this.n, stimulus);
+      for (const d of this.devices) if (!d.broken) d.ac(s, w);
+      for (let i = 0; i < this.n; i++) s.Gr[i * this.n + i] += 1e-12;
+      if (!solveComplex(s)) continue;
+      const vi = inNode < 0 ? [0, 0] : [s.br[inNode], s.bi[inNode]];
+      const vo = outNode < 0 ? [0, 0] : [s.br[outNode], s.bi[outNode]];
+      const den = vi[0] ** 2 + vi[1] ** 2;
+      if (den < 1e-30) continue;
+      const hr = (vo[0] * vi[0] + vo[1] * vi[1]) / den;
+      const hi = (vo[1] * vi[0] - vo[0] * vi[1]) / den;
+      const mag = Math.hypot(hr, hi);
+      out.push({ f, db: 20 * Math.log10(Math.max(mag, 1e-12)), phase: (Math.atan2(hi, hr) * 180) / Math.PI });
+    }
+    return out;
   }
 
   /** Voltage of a node (-1 is ground). */

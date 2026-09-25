@@ -14,6 +14,7 @@ interface PartRefs {
   readout: SVGTextElement | null;
   lin: SVGElement | null;
   lout: SVGElement | null;
+  segs: SVGElement[];
   flows: { el: SVGLineElement; pin: number; sign: number }[];
 }
 
@@ -639,14 +640,18 @@ export class Board {
           label = `<text class="plabel" x="${p.x + o.x}" y="${y}" text-anchor="${anchor}"><tspan class="lname">${escapeXml(p.label)}</tspan>${val ? `<tspan class="lval" dx="5">${escapeXml(val)}</tspan>` : ''}</text>`;
         }
         let readout = '';
-        const ra = def.readoutAt ?? (p.type === 'probe' ? { x: 0, y: -31 } : null);
-        if (ra) {
-          const isMeter = p.type === 'voltmeter' || p.type === 'ammeter';
+        const lcd = LCD_WIDTH[p.type];
+        let o: Pt | null = null;
+        if (p.type === 'voltmeter' || p.type === 'ammeter') {
           // Meter displays stay readable: under the meter when it lies flat, beside its label when upright.
-          const o = isMeter && p.rot % 2 === 1 ? { x: 64, y: 20 } : rotatePt(ra, isMeter ? p.rot % 2 : p.rot);
-          if (isMeter) readout += `<rect class="lcd" x="${p.x + o.x - 34}" y="${p.y + o.y - 10}" width="68" height="18" rx="3"/>`;
+          o = p.rot % 2 === 1 ? { x: 64, y: 20 } : rotatePt(def.readoutAt!, p.rot % 2);
+        } else if (p.type === 'psu') o = p.rot % 2 === 0 ? { x: 92, y: 18 } : { x: 0, y: 52 };
+        else if (p.type === 'probe') o = rotatePt({ x: 0, y: -31 }, p.rot);
+        else if (def.readoutAt) o = rotatePt(def.readoutAt, p.rot);
+        if (o) {
+          if (lcd) readout += `<rect class="lcd" x="${p.x + o.x - lcd / 2}" y="${p.y + o.y - 10}" width="${lcd}" height="18" rx="3"/>`;
           const txt = p.type === 'probe' ? `CH${p.params.ch}` : '';
-          readout += `<text class="readout${isMeter ? ' meter' : ''}" x="${p.x + o.x}" y="${p.y + o.y + 4}" text-anchor="middle">${txt}</text>`;
+          readout += `<text class="readout${lcd ? ' meter' : ''}" x="${p.x + o.x}" y="${p.y + o.y + 4}" text-anchor="middle">${txt}</text>`;
         }
         const smoke = broken
           ? `<g class="smoke" transform="translate(${p.x} ${p.y - 10})"><circle r="5"/><circle r="4" cx="6"/><circle r="3" cx="-5"/></g><text class="broken-x" x="${p.x}" y="${p.y + 5}" text-anchor="middle">✕</text>`
@@ -689,6 +694,7 @@ export class Board {
         readout: g.querySelector('.readout'),
         lin: g.querySelector('.lin'),
         lout: g.querySelector('.lout'),
+        segs: [...g.querySelectorAll<SVGElement>('.seg')],
         flows: [],
       });
     }
@@ -815,9 +821,19 @@ export class Board {
         if (r.readout) r.readout.textContent = on ? '1' : '0';
       }
       if (r.heat && p.type === 'resistor') {
-        const v = e.volt(dev.nodes[0]) - e.volt(dev.nodes[1]);
-        const ratio = Math.abs(v * dev.cur[0]) / Math.max(dev.num('Pmax', 0.25), 1e-6);
+        const ratio = x.heat ?? 0;
         r.heat.style.fillOpacity = String(Math.min(0.9, Math.max(0, (ratio - 0.5) * 1.6)));
+      }
+      if (p.type === 'sevenseg') {
+        for (const seg of r.segs) {
+          const b = broken ? 0 : Math.min(1, x[`seg_${seg.dataset.seg}`] ?? 0);
+          seg.style.opacity = String(0.1 + 0.9 * Math.sqrt(b));
+        }
+      }
+      if (r.readout && p.type === 'multimeter') r.readout.textContent = broken ? '— — —' : multimeterText(String(p.params.mode), x.reading ?? 0);
+      if (r.readout && p.type === 'psu') {
+        const v = e.volt(dev.nodes[0]) - e.volt(dev.nodes[1]);
+        r.readout.textContent = `${fmt(v, 'V', 3)}  ${fmt(x.iout ?? 0, 'A', 2)}${x.cc ? ' CC' : ''}`;
       }
       if (r.readout && (p.type === 'voltmeter' || p.type === 'ammeter')) {
         const unit = p.type === 'voltmeter' ? 'V' : 'A';
@@ -838,6 +854,27 @@ export class Board {
     const off = (this.offsets.get(el) ?? 0) - speed * dt;
     this.offsets.set(el, off % 1000);
     el.style.strokeDashoffset = String(off % 1000);
+  }
+}
+
+const LCD_WIDTH: Record<string, number> = { voltmeter: 68, ammeter: 68, multimeter: 54, psu: 112 };
+
+/** What the multimeter screen shows in each selector position. */
+export function multimeterText(mode: string, v: number): string {
+  if (!Number.isFinite(v)) return 'OL';
+  switch (mode) {
+    case 'vac':
+      return `${fmt(v, 'V', 3)}~`;
+    case 'adc':
+      return fmt(v, 'A', 3);
+    case 'aac':
+      return `${fmt(v, 'A', 3)}~`;
+    case 'ohm':
+      return `${fmt(v, 'Ω', 3)}${v < 30 ? ' •))' : ''}`;
+    case 'diode':
+      return fmt(v, 'V', 3);
+    default:
+      return fmt(v, 'V', 3);
   }
 }
 

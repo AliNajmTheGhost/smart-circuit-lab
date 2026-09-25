@@ -472,6 +472,52 @@ select {
 .sym-text.tiny {
   font-size: 9px;
 }
+.sym-text.pin {
+  font-size: 8px;
+  font-weight: 500;
+}
+.sym-text.ictitle {
+  font-size: 11px;
+  font-weight: 600;
+}
+.sym .ic {
+  fill: var(--surface-2);
+}
+.sym .segbody {
+  fill: #151515;
+  stroke: var(--part);
+}
+.sym .seg {
+  stroke: none;
+  opacity: 0.1;
+}
+.sym .dmm {
+  fill: #f0b429;
+  stroke: #6b4c05;
+}
+.sym .dmmdial {
+  fill: #2a2a2a;
+  stroke: #111;
+}
+.sym .jack-red {
+  fill: #d33a2c;
+  stroke: #7a1d14;
+}
+.sym .jack-com {
+  fill: #222;
+  stroke: #000;
+}
+.sym .lead-red {
+  stroke: #d33a2c;
+  stroke-width: 2.4;
+}
+.sym .lead-com {
+  stroke: #333;
+  stroke-width: 2.4;
+}
+.sym .bodecurve {
+  stroke: var(--accent);
+}
 .picon .sym-text {
   font-size: 11px;
 }
@@ -1151,6 +1197,39 @@ select {
 }
 .menu button:hover {
   background: var(--surface-2);
+}
+.menu-head {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  padding: 8px 10px 2px;
+}
+.grade-head {
+  margin: 10px 0 2px;
+  color: var(--accent);
+}
+.tabs {
+  display: flex;
+  gap: 4px;
+}
+.tabs button {
+  background: transparent;
+  color: #9fc4b6;
+  border: 1px solid #2a4a3d;
+  border-radius: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+.tabs button.on {
+  background: #1f3a31;
+  color: #fff;
+}
+.cutoff {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: #e48b5c;
+  font-weight: 500;
 }
 .menu small {
   color: var(--muted);

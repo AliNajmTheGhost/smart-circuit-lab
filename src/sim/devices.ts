@@ -1,5 +1,6 @@
 import { LED_COLORS } from '../model/library';
 import type { Part } from '../model/types';
+import type { AcStamper } from './ac';
 import type { Stamper } from './stamper';
 
 /** Thermal voltage at room temperature. */
@@ -41,6 +42,36 @@ function stepLimit(vnew: number, vold: number, max: number): number {
   return Math.abs(d) > max ? vold + Math.sign(d) * max : vnew;
 }
 
+/** One PN junction (Shockley diode) with voltage limiting; building block for diodes, LEDs, SCRs. */
+class Junction {
+  vLast = 0;
+  constructor(
+    public Is: number,
+    public nvt: number,
+  ) {}
+  iv(v: number): [number, number] {
+    const e = safeExp(v / this.nvt);
+    return [this.Is * (e - 1), (this.Is * e) / this.nvt + GMIN];
+  }
+  /** Stamps the linearised junction from a to k. Returns true if the voltage had to be limited. */
+  stamp(s: Stamper, a: number, k: number, raw: number): boolean {
+    const vcrit = this.nvt * Math.log(this.nvt / (Math.SQRT2 * this.Is));
+    const v = pnjlim(raw, this.vLast, this.nvt, vcrit);
+    this.vLast = v;
+    const [I, g] = this.iv(v);
+    s.g(a, k, g);
+    s.flow(a, k, I - g * v);
+    return Math.abs(v - raw) > 1e-9;
+  }
+  current(v: number): number {
+    return this.iv(v)[0] + GMIN * v;
+  }
+  /** Small-signal conductance at the last operating point. */
+  g(): number {
+    return this.iv(this.vLast)[1];
+  }
+}
+
 export abstract class Device {
   broken = false;
   /** Set during stamp() when the voltage was limited: Newton has not converged yet. */
@@ -69,6 +100,8 @@ export abstract class Device {
   abstract stamp(s: Stamper, c: Ctx): void;
   /** Called once the step has converged: update memory and currents. */
   abstract accept(c: Ctx): void;
+  /** Small-signal admittance at angular frequency w, for the Bode plotter. Default: no connection. */
+  ac(_s: AcStamper, _w: number): void {}
   /** Damage check after each step. A 'burn' issue breaks the part. */
   limits(_c: Ctx): Issue | null {
     return null;
@@ -98,48 +131,81 @@ abstract class Conductance extends Device {
     const i = this.broken ? 0 : (this.v(c.x, 0) - this.v(c.x, 1)) * this.conductance();
     this.cur = [i, -i];
   }
+  ac(s: AcStamper): void {
+    if (!this.broken) s.y(this.nodes[0], this.nodes[1], this.conductance());
+  }
   power(c: Ctx): number {
     return Math.abs((this.v(c.x, 0) - this.v(c.x, 1)) * this.cur[0]);
   }
 }
 
-class Resistor extends Conductance {
-  conductance(): number {
-    return 1 / Math.max(this.num('R', 1000), 1e-3);
+/**
+ * Parts that heat up: damage follows the average power (like a real filament or resistor body),
+ * so an AC peak of twice the average is not mistaken for overload.
+ */
+abstract class Heating extends Conductance {
+  pAvg = 0;
+  pNow = 0;
+  accept(c: Ctx): void {
+    super.accept(c);
+    this.pNow = this.power(c);
+    this.pAvg += (this.pNow - this.pAvg) * Math.min(1, c.dt / 0.05);
   }
-  limits(c: Ctx): Issue | null {
-    const p = this.power(c);
-    const max = this.num('Pmax', 0.25);
-    return p > 2 * max ? { level: 'burn', key: 'burn.resistor', vars: { p, max } } : null;
+  overloaded(max: number): boolean {
+    return this.pAvg > 2 * max || this.pNow > 20 * max;
   }
-  advice(x: Float64Array): Issue | null {
-    const p = Math.abs((this.v(x, 0) - this.v(x, 1)) * this.cur[0]);
-    const max = this.num('Pmax', 0.25);
-    return p > max ? { level: 'warn', key: 'warn.resistorHot', vars: { p, max } } : null;
+  save(): unknown {
+    return this.pAvg;
   }
-  extra(): Record<string, number> {
-    return {};
+  load(s: unknown): void {
+    if (typeof s === 'number') this.pAvg = s;
   }
 }
 
-class Lamp extends Conductance {
+class Resistor extends Heating {
+  conductance(): number {
+    return 1 / Math.max(this.num('R', 1000), 1e-3);
+  }
+  limits(): Issue | null {
+    const max = this.num('Pmax', 0.25);
+    return this.overloaded(max) ? { level: 'burn', key: 'burn.resistor', vars: { p: Math.max(this.pAvg, this.pNow), max } } : null;
+  }
+  advice(): Issue | null {
+    const max = this.num('Pmax', 0.25);
+    return this.pAvg > max ? { level: 'warn', key: 'warn.resistorHot', vars: { p: this.pAvg, max } } : null;
+  }
+  extra(): Record<string, number> {
+    return { heat: this.pAvg / Math.max(this.num('Pmax', 0.25), 1e-9) };
+  }
+}
+
+class Ldr extends Conductance {
+  resistance(): number {
+    const dark = Math.max(this.num('Rdark', 1e6), 1);
+    const lit = Math.max(this.num('Rlight', 500), 1);
+    const k = Math.min(1, Math.max(0, this.num('light', 0.5)));
+    return dark * Math.pow(lit / dark, k);
+  }
+  conductance(): number {
+    return 1 / this.resistance();
+  }
+  extra(): Record<string, number> {
+    return { r: this.resistance() };
+  }
+}
+
+class Lamp extends Heating {
   conductance(): number {
     const v = this.num('V', 12);
     const p = Math.max(this.num('P', 5), 1e-3);
     return p / (v * v);
   }
-  brightness = 0;
-  accept(c: Ctx): void {
-    super.accept(c);
-    this.brightness = this.power(c) / this.num('P', 5);
-  }
-  limits(c: Ctx): Issue | null {
-    const p = this.power(c);
+  limits(): Issue | null {
     const max = this.num('P', 5);
-    return p > 2 * max ? { level: 'burn', key: 'burn.lamp', vars: { p, max, v: this.num('V', 12) } } : null;
+    return this.overloaded(max) ? { level: 'burn', key: 'burn.lamp', vars: { p: Math.max(this.pAvg, this.pNow), max, v: this.num('V', 12) } } : null;
   }
   extra(): Record<string, number> {
-    return { brightness: this.brightness };
+    return { brightness: this.pAvg / this.num('P', 5) };
   }
 }
 
@@ -179,6 +245,11 @@ class Pot extends Device {
     const ib = (vb - vw) / r2;
     this.cur = [ia, ib, -(ia + ib)];
   }
+  ac(s: AcStamper): void {
+    const [r1, r2] = this.r();
+    s.y(this.nodes[0], this.nodes[2], 1 / r1);
+    s.y(this.nodes[2], this.nodes[1], 1 / r2);
+  }
 }
 
 // ---------------------------------------------------------------- sources
@@ -199,6 +270,11 @@ class Battery extends Device {
   accept(c: Ctx): void {
     const i = (this.v(c.x, 0) - this.v(c.x, 1) - this.emf(c.t)) / this.rint();
     this.cur = [i, -i];
+  }
+  ac(s: AcStamper): void {
+    const g = 1 / this.rint();
+    s.y(this.nodes[0], this.nodes[1], g);
+    if (s.stimulus === this.part.id) s.flow(this.nodes[1], this.nodes[0], g);
   }
   advice(): Issue | null {
     const delivered = Math.abs(this.cur[0]);
@@ -221,7 +297,9 @@ class FuncGen extends Battery {
   emf(t: number): number {
     const vp = this.num('Vp', 2);
     const f = Math.max(this.num('f', 100), 1e-3);
+    const fm = Math.max(this.num('fm', 100), 1e-3);
     const phase = (t * f) % 1;
+    const TAU = 2 * Math.PI;
     let w: number;
     switch (this.part.params.wave) {
       case 'square':
@@ -230,13 +308,75 @@ class FuncGen extends Battery {
       case 'triangle':
         w = phase < 0.25 ? 4 * phase : phase < 0.75 ? 2 - 4 * phase : 4 * phase - 4;
         break;
+      case 'pulse':
+        w = phase < this.num('duty', 0.5) ? 1 : 0;
+        break;
+      case 'pwm':
+        w = phase < 0.5 + 0.45 * Math.sin(TAU * fm * t) ? 1 : 0;
+        break;
+      case 'am':
+        w = (1 + this.num('m', 0.5) * Math.sin(TAU * fm * t)) * Math.sin(TAU * f * t);
+        break;
+      case 'fm':
+        w = Math.sin(TAU * f * t + (this.num('dev', 50) / fm) * Math.sin(TAU * fm * t));
+        break;
       default:
-        w = Math.sin(2 * Math.PI * phase);
+        w = Math.sin(TAU * phase);
     }
     return this.num('offset', 0) + vp * w;
   }
   advice(): Issue | null {
     return null;
+  }
+}
+
+/** Bench power supply: constant voltage until the load asks for more than the current limit. */
+class PowerSupply extends Device {
+  readonly nonlinear = true;
+  cc = false;
+  private flips = 0;
+  readonly r = 0.01;
+  set(): { V: number; I: number } {
+    return { V: Math.min(30, Math.max(0, this.num('V', 12))), I: Math.max(1e-3, this.num('Ilim', 1)) };
+  }
+  stamp(s: Stamper, c: Ctx): void {
+    const { V, I } = this.set();
+    const [p, n] = this.nodes;
+    const vout = this.v(c.x, 0) - this.v(c.x, 1);
+    let cc = this.cc;
+    if (!cc && (V - vout) / this.r > I * 1.0001) cc = true;
+    else if (cc && vout > V) cc = false;
+    if (cc !== this.cc && this.flips < 8) {
+      this.cc = cc;
+      this.flips++;
+      this.limited = true;
+    }
+    if (this.cc) {
+      s.g(p, n, 1e-6);
+      s.flow(n, p, I);
+    } else {
+      s.g(p, n, 1 / this.r);
+      s.flow(n, p, V / this.r);
+    }
+  }
+  accept(c: Ctx): void {
+    this.flips = 0;
+    const { V, I } = this.set();
+    const vout = this.v(c.x, 0) - this.v(c.x, 1);
+    const i = this.cc ? vout * 1e-6 - I : (vout - V) / this.r;
+    this.cur = [i, -i];
+  }
+  ac(s: AcStamper): void {
+    s.y(this.nodes[0], this.nodes[1], this.cc ? 1e-6 : 1 / this.r);
+  }
+  extra(): Record<string, number> {
+    return { cc: this.cc ? 1 : 0, iout: -this.cur[0] };
+  }
+  save(): unknown {
+    return this.cc;
+  }
+  load(s: unknown): void {
+    if (typeof s === 'boolean') this.cc = s;
   }
 }
 
@@ -251,12 +391,12 @@ class Capacitor extends Device {
   ) {
     super(part, nodes);
   }
-  gc(dt: number): number {
-    return Math.max(this.num('C', 1e-6), 1e-15) / dt;
+  cap(): number {
+    return Math.max(this.num('C', 1e-6), 1e-15);
   }
   stamp(s: Stamper, c: Ctx): void {
     if (this.broken) return;
-    const g = this.gc(c.dt);
+    const g = this.cap() / c.dt;
     s.g(this.nodes[0], this.nodes[1], g);
     s.flow(this.nodes[0], this.nodes[1], -g * this.vPrev);
   }
@@ -266,9 +406,12 @@ class Capacitor extends Device {
       return;
     }
     const v = this.v(c.x, 0) - this.v(c.x, 1);
-    const i = this.gc(c.dt) * (v - this.vPrev);
+    const i = (this.cap() / c.dt) * (v - this.vPrev);
     this.vPrev = v;
     this.cur = [i, -i];
+  }
+  ac(s: AcStamper, w: number): void {
+    if (!this.broken) s.y(this.nodes[0], this.nodes[1], 0, w * this.cap());
   }
   limits(): Issue | null {
     if (this.polarized && this.vPrev < -1.5) return { level: 'burn', key: 'burn.ecapReverse', vars: { v: -this.vPrev } };
@@ -286,9 +429,11 @@ class Capacitor extends Device {
 
 class Inductor extends Device {
   iPrev = 0;
+  lr(): { L: number; R: number } {
+    return { L: Math.max(this.num('L', 0.01), 1e-12), R: Math.max(this.num('Rs', 1), 1e-6) };
+  }
   coef(dt: number): { g: number; k: number } {
-    const L = Math.max(this.num('L', 0.01), 1e-12);
-    const R = Math.max(this.num('Rs', 1), 1e-6);
+    const { L, R } = this.lr();
     const g = 1 / (R + L / dt);
     return { g, k: g * (L / dt) };
   }
@@ -303,6 +448,11 @@ class Inductor extends Device {
     this.iPrev = g * v + k * this.iPrev;
     this.cur = [this.iPrev, -this.iPrev];
   }
+  ac(s: AcStamper, w: number): void {
+    const { L, R } = this.lr();
+    const den = R * R + w * w * L * L;
+    s.y(this.nodes[0], this.nodes[1], R / den, (-w * L) / den);
+  }
   save(): unknown {
     return this.iPrev;
   }
@@ -311,9 +461,81 @@ class Inductor extends Device {
   }
 }
 
+/** Two coupled coils (k = 0.999). Currents are the energy-storage state, like an inductor's. */
+class Transformer extends Device {
+  i1 = 0;
+  i2 = 0;
+  inv(): { a: number; b: number; d: number } {
+    const n = Math.max(this.num('n', 10), 0.01);
+    const L1 = Math.max(this.num('L1', 10), 1e-9);
+    const L2 = L1 / (n * n);
+    const M = 0.999 * Math.sqrt(L1 * L2);
+    const det = L1 * L2 - M * M;
+    // Inverse inductance matrix [[a, b], [b, d]].
+    return { a: L2 / det, b: -M / det, d: L1 / det };
+  }
+  stamp(s: Stamper, c: Ctx): void {
+    const { a, b, d } = this.inv();
+    const dt = c.dt;
+    const [p1, p2, s1, s2] = this.nodes;
+    const v1 = this.v(c.x, 0) - this.v(c.x, 1);
+    const v2 = this.v(c.x, 2) - this.v(c.x, 3);
+    const I1 = dt * (a * v1 + b * v2) + this.i1;
+    const I2 = dt * (b * v1 + d * v2) + this.i2;
+    s.lin(
+      [p1, p2, s1, s2],
+      [I1, -I1, I2, -I2],
+      [
+        [p1, p2, v1],
+        [s1, s2, v2],
+      ],
+      [
+        [dt * a, dt * b],
+        [-dt * a, -dt * b],
+        [dt * b, dt * d],
+        [-dt * b, -dt * d],
+      ],
+    );
+  }
+  accept(c: Ctx): void {
+    const { a, b, d } = this.inv();
+    const v1 = this.v(c.x, 0) - this.v(c.x, 1);
+    const v2 = this.v(c.x, 2) - this.v(c.x, 3);
+    this.i1 += c.dt * (a * v1 + b * v2);
+    this.i2 += c.dt * (b * v1 + d * v2);
+    this.cur = [this.i1, -this.i1, this.i2, -this.i2];
+  }
+  ac(s: AcStamper, w: number): void {
+    const { a, b, d } = this.inv();
+    const [p1, p2, s1, s2] = this.nodes;
+    // Y = Γ / (jω) = −j·Γ/ω
+    const k = -1 / w;
+    s.trans(p1, p1, p2, 0, k * a);
+    s.trans(p1, s1, s2, 0, k * b);
+    s.trans(p2, p1, p2, 0, -k * a);
+    s.trans(p2, s1, s2, 0, -k * b);
+    s.trans(s1, p1, p2, 0, k * b);
+    s.trans(s1, s1, s2, 0, k * d);
+    s.trans(s2, p1, p2, 0, -k * b);
+    s.trans(s2, s1, s2, 0, -k * d);
+  }
+  limits(): Issue | null {
+    return Math.abs(this.i1) > 20 ? { level: 'burn', key: 'burn.transformer', vars: { i: Math.abs(this.i1) } } : null;
+  }
+  extra(): Record<string, number> {
+    return { i1: this.i1, i2: this.i2 };
+  }
+  save(): unknown {
+    return [this.i1, this.i2];
+  }
+  load(s: unknown): void {
+    if (Array.isArray(s)) [this.i1, this.i2] = s as [number, number];
+  }
+}
+
 // ---------------------------------------------------------------- diodes
 
-type DiodeKind = 'diode' | 'schottky' | 'zener' | 'led';
+type DiodeKind = 'diode' | 'schottky' | 'zener' | 'led' | 'photodiode';
 
 class Diode extends Device {
   readonly nonlinear = true;
@@ -331,14 +553,15 @@ class Diode extends Device {
         return { Is: 1e-6, nvt: 1.05 * VT, vz: 0, ibv: 0 };
       case 'zener':
         return { Is: 2.5e-9, nvt: 1.75 * VT, vz: Math.max(this.num('Vz', 5.1), 0.5), ibv: 5e-3 };
-      case 'led': {
-        const vf = LED_COLORS[String(this.part.params.color)]?.vf ?? 1.8;
-        const nvt = 2 * VT;
-        return { Is: 0.01 / Math.exp(vf / nvt), nvt, vz: 0, ibv: 0 };
-      }
+      case 'led':
+        return ledModel(String(this.part.params.color));
       default:
         return { Is: 2.5e-9, nvt: 1.75 * VT, vz: 0, ibv: 0 };
     }
+  }
+  /** Reverse current made by light (photodiode only). */
+  photo(): number {
+    return this.kind === 'photodiode' ? Math.min(1, Math.max(0, this.num('light', 0.5))) * this.num('Isc', 100e-6) : 0;
   }
   iv(v: number): [number, number] {
     const { Is, nvt, vz, ibv } = this.model();
@@ -369,6 +592,8 @@ class Diode extends Device {
     const [a, k] = this.nodes;
     s.g(a, k, g + GMIN);
     s.flow(a, k, I - g * v);
+    const ph = this.photo();
+    if (ph) s.flow(k, a, ph);
   }
   accept(c: Ctx): void {
     if (this.broken) {
@@ -377,8 +602,11 @@ class Diode extends Device {
     }
     const v = this.v(c.x, 0) - this.v(c.x, 1);
     this.vLast = v;
-    const i = this.iv(v)[0] + GMIN * v;
+    const i = this.iv(v)[0] + GMIN * v - this.photo();
     this.cur = [i, -i];
+  }
+  ac(s: AcStamper): void {
+    if (!this.broken) s.y(this.nodes[0], this.nodes[1], this.iv(this.vLast)[1] + GMIN);
   }
   limits(): Issue | null {
     const i = this.cur[0];
@@ -409,6 +637,84 @@ class Diode extends Device {
   }
   load(s: unknown): void {
     if (typeof s === 'number') this.vLast = s;
+  }
+}
+
+function ledModel(color: string): { Is: number; nvt: number; vz: number; ibv: number } {
+  const vf = LED_COLORS[color]?.vf ?? 1.8;
+  const nvt = 2 * VT;
+  return { Is: 0.01 / Math.exp(vf / nvt), nvt, vz: 0, ibv: 0 };
+}
+
+/**
+ * SCR and triac. The gate is a junction to the cathode (MT1); the main path is either blocking
+ * (tiny leakage) or conducting like a diode (two opposed diodes for the triac).
+ * It latches on when gate current exceeds Igt and switches off below the holding current.
+ */
+class Thyristor extends Device {
+  readonly nonlinear = true;
+  on = false;
+  private gateF = new Junction(1e-14, VT);
+  private gateR = new Junction(1e-14, VT);
+  private mainF = new Junction(1e-10, 1.6 * VT);
+  private mainR = new Junction(1e-10, 1.6 * VT);
+  constructor(
+    part: Part,
+    nodes: number[],
+    readonly bidirectional: boolean,
+  ) {
+    super(part, nodes);
+  }
+  stamp(s: Stamper, c: Ctx): void {
+    if (this.broken) return;
+    const [A, K, G] = this.nodes;
+    const vak = this.v(c.x, 0) - this.v(c.x, 1);
+    const vgk = this.v(c.x, 2) - this.v(c.x, 1);
+    let lim = this.gateF.stamp(s, G, K, vgk);
+    if (this.bidirectional) lim = this.gateR.stamp(s, K, G, -vgk) || lim;
+    if (this.on) {
+      lim = this.mainF.stamp(s, A, K, vak) || lim;
+      if (this.bidirectional) lim = this.mainR.stamp(s, K, A, -vak) || lim;
+    } else {
+      s.g(A, K, 1e-7);
+    }
+    this.limited = lim;
+  }
+  accept(c: Ctx): void {
+    if (this.broken) {
+      this.cur = [0, 0, 0];
+      return;
+    }
+    const vak = this.v(c.x, 0) - this.v(c.x, 1);
+    const vgk = this.v(c.x, 2) - this.v(c.x, 1);
+    const ig = this.gateF.current(vgk) - (this.bidirectional ? this.gateR.current(-vgk) : 0);
+    const iak = this.on ? this.mainF.current(vak) - (this.bidirectional ? this.mainR.current(-vak) : 0) : vak * 1e-7;
+    this.cur = [iak, -(iak + ig), ig];
+    const Igt = this.num('Igt', 0.001);
+    const Ih = this.num('Ih', 0.005);
+    if (!this.on) {
+      const fires = this.bidirectional ? Math.abs(ig) > Igt && Math.abs(vak) > 0.3 : ig > Igt && vak > 0.3;
+      if (fires) this.on = true;
+    } else if ((this.bidirectional ? Math.abs(iak) : iak) < Ih) {
+      this.on = false;
+    }
+  }
+  ac(s: AcStamper): void {
+    const [A, K, G] = this.nodes;
+    s.y(G, K, this.gateF.g());
+    s.y(A, K, this.on ? this.mainF.g() : 1e-7);
+  }
+  limits(): Issue | null {
+    return Math.abs(this.cur[0]) > 25 ? { level: 'burn', key: 'burn.thyristor', vars: { i: Math.abs(this.cur[0]) } } : null;
+  }
+  extra(): Record<string, number> {
+    return { on: this.on ? 1 : 0 };
+  }
+  save(): unknown {
+    return this.on;
+  }
+  load(s: unknown): void {
+    if (typeof s === 'boolean') this.on = s;
   }
 }
 
@@ -482,6 +788,20 @@ class Bjt extends Device {
     const m = this.eval(this.vbe, this.vbc);
     this.cur = [p * m.Ib, p * m.Ic, -p * (m.Ib + m.Ic)];
   }
+  ac(s: AcStamper): void {
+    if (this.broken) return;
+    const [B, C, E] = this.nodes;
+    const m = this.eval(this.vbe, this.vbc);
+    const rows: [number, number[]][] = [
+      [C, m.dIc],
+      [B, m.dIb],
+      [E, [-(m.dIc[0] + m.dIb[0]), -(m.dIc[1] + m.dIb[1])]],
+    ];
+    for (const [row, d] of rows) {
+      s.trans(row, B, E, d[0]);
+      s.trans(row, B, C, d[1]);
+    }
+  }
   limits(): Issue | null {
     const ib = Math.abs(this.cur[0]);
     if (ib > 0.1) return { level: 'burn', key: 'burn.base', vars: { i: ib } };
@@ -529,6 +849,11 @@ class Mosfet extends Device {
     }
     return { id: (K / 2) * vov * vov * (1 + lam * vds), gm: K * vov * (1 + lam * vds), gds: (K / 2) * vov * vov * lam + GMIN };
   }
+  private oriented(): { d: number; s: number; vgs: number; vds: number } {
+    const [, D, S] = this.nodes;
+    const rev = this.vds < 0;
+    return { d: rev ? S : D, s: rev ? D : S, vgs: rev ? this.vgs - this.vds : this.vgs, vds: Math.abs(this.vds) };
+  }
   stamp(s: Stamper, c: Ctx): void {
     if (this.broken) return;
     const p = this.pol;
@@ -538,24 +863,18 @@ class Mosfet extends Device {
     const vs = volt(c.x, S);
     const rawGs = p * (vg - vs);
     const rawDs = p * (vd - vs);
-    const vgs = stepLimit(rawGs, this.vgs, 1);
-    const vds = stepLimit(rawDs, this.vds, 2);
-    this.limited = Math.abs(vgs - rawGs) + Math.abs(vds - rawDs) > 1e-9;
-    this.vgs = vgs;
-    this.vds = vds;
+    this.vgs = stepLimit(rawGs, this.vgs, 1);
+    this.vds = stepLimit(rawDs, this.vds, 2);
+    this.limited = Math.abs(this.vgs - rawGs) + Math.abs(this.vds - rawDs) > 1e-9;
     // When vds < 0 the device is symmetric: swap drain and source.
-    const rev = vds < 0;
-    const dNode = rev ? S : D;
-    const sNode = rev ? D : S;
-    const vgsE = rev ? vgs - vds : vgs;
-    const vdsE = rev ? -vds : vds;
-    const m = this.eval(vgsE, vdsE);
+    const o = this.oriented();
+    const m = this.eval(o.vgs, o.vds);
     s.lin(
-      [dNode, sNode],
+      [o.d, o.s],
       [p * m.id, -p * m.id],
       [
-        [G, sNode, p * vgsE],
-        [dNode, sNode, p * vdsE],
+        [G, o.s, p * o.vgs],
+        [o.d, o.s, p * o.vds],
       ],
       [
         [m.gm, m.gds],
@@ -576,6 +895,16 @@ class Mosfet extends Device {
     const m = this.eval(rev ? this.vgs - this.vds : this.vgs, Math.abs(this.vds));
     const id = p * (rev ? -m.id : m.id);
     this.cur = [0, id, -id];
+  }
+  ac(s: AcStamper): void {
+    if (this.broken) return;
+    const G = this.nodes[0];
+    const o = this.oriented();
+    const m = this.eval(o.vgs, o.vds);
+    s.trans(o.d, G, o.s, m.gm);
+    s.trans(o.d, o.d, o.s, m.gds);
+    s.trans(o.s, G, o.s, -m.gm);
+    s.trans(o.s, o.d, o.s, -m.gds);
   }
   extra(): Record<string, number> {
     return { vgs: this.pol * this.vgs, vds: this.pol * this.vds, id: this.cur[1] };
@@ -607,72 +936,173 @@ const GATE_FN: Record<string, (a: number, b: number) => number> = {
   xnor: (a, b) => 1 - (a ^ b),
 };
 
-/** A logic output: 0 V or 5 V behind 100 Ω, like a real TTL output. */
-abstract class LogicDriver extends Device {
-  out = 0;
-  abstract outPin(): number;
-  stampOut(s: Stamper): void {
-    const g = 1 / LOGIC_ROUT;
-    const o = this.nodes[this.outPin()];
-    s.g(o, -1, g);
-    s.flow(-1, o, this.out * LOGIC_HIGH * g);
+/**
+ * Any digital part: inputs are high-impedance, outputs are 0 V or 5 V behind 100 Ω like TTL.
+ * New outputs are computed after each step, a small realistic propagation delay.
+ */
+abstract class Digital extends Device {
+  inLv: number[];
+  out: number[];
+  constructor(
+    part: Part,
+    nodes: number[],
+    readonly ins: number[],
+    readonly outs: number[],
+  ) {
+    super(part, nodes);
+    this.inLv = ins.map(() => 0);
+    this.out = outs.map(() => 0);
   }
-  outCurrent(x: Float64Array): number {
-    return (this.v(x, this.outPin()) - this.out * LOGIC_HIGH) / LOGIC_ROUT;
+  abstract logic(prev: number[]): void;
+  stamp(s: Stamper): void {
+    const g = 1 / LOGIC_ROUT;
+    this.outs.forEach((pin, i) => {
+      const o = this.nodes[pin];
+      s.g(o, -1, g);
+      s.flow(-1, o, this.out[i] * LOGIC_HIGH * g);
+    });
+    for (const pin of this.ins) s.g(this.nodes[pin], -1, 1e-6);
+  }
+  accept(c: Ctx): void {
+    const cur = this.nodes.map(() => 0);
+    const prev = [...this.inLv];
+    this.ins.forEach((pin, i) => {
+      const v = this.v(c.x, pin);
+      this.inLv[i] = level(v, this.inLv[i]);
+      cur[pin] = v * 1e-6;
+    });
+    this.outs.forEach((pin, i) => (cur[pin] = (this.v(c.x, pin) - this.out[i] * LOGIC_HIGH) / LOGIC_ROUT));
+    this.cur = cur;
+    this.logic(prev);
+  }
+  ac(s: AcStamper): void {
+    for (const pin of this.outs) s.y(this.nodes[pin], -1, 1 / LOGIC_ROUT);
+    for (const pin of this.ins) s.y(this.nodes[pin], -1, 1e-6);
+  }
+  rising(prev: number[], i: number): boolean {
+    return prev[i] === 0 && this.inLv[i] === 1;
+  }
+  save(): unknown {
+    return { inLv: this.inLv, out: this.out };
+  }
+  load(s: unknown): void {
+    const o = s as { inLv: number[]; out: number[] } | null;
+    if (o?.inLv?.length === this.inLv.length && o.out?.length === this.out.length) {
+      this.inLv = [...o.inLv];
+      this.out = [...o.out];
+    }
   }
 }
 
-class Gate extends LogicDriver {
-  inLevels: number[] = [0, 0];
+class Gate extends Digital {
   constructor(
     part: Part,
     nodes: number[],
     readonly fn: string,
   ) {
-    super(part, nodes);
-    this.out = GATE_FN[fn](0, 0);
+    super(
+      part,
+      nodes,
+      Array.from({ length: nodes.length - 1 }, (_, i) => i),
+      [nodes.length - 1],
+    );
+    this.out = [GATE_FN[fn](0, 0)];
   }
-  outPin(): number {
-    return this.nodes.length - 1;
-  }
-  stamp(s: Stamper): void {
-    this.stampOut(s);
-    for (let i = 0; i < this.nodes.length - 1; i++) s.g(this.nodes[i], -1, 1e-6);
-  }
-  accept(c: Ctx): void {
-    const n = this.nodes.length - 1;
-    const cur: number[] = [];
-    for (let i = 0; i < n; i++) {
-      const v = this.v(c.x, i);
-      this.inLevels[i] = level(v, this.inLevels[i]);
-      cur.push(v * 1e-6);
-    }
-    cur.push(this.outCurrent(c.x));
-    this.cur = cur;
-    // The new output takes effect on the next step: a small, realistic propagation delay.
-    this.out = GATE_FN[this.fn](this.inLevels[0], this.inLevels[1] ?? 0);
+  logic(): void {
+    this.out[0] = GATE_FN[this.fn](this.inLv[0], this.inLv[1] ?? 0);
   }
   extra(): Record<string, number> {
-    return { out: this.out };
-  }
-  save(): unknown {
-    return [this.out, ...this.inLevels];
-  }
-  load(s: unknown): void {
-    if (Array.isArray(s)) [this.out, ...this.inLevels] = s as number[];
+    return { out: this.out[0] };
   }
 }
 
-class LogicIn extends LogicDriver {
-  outPin(): number {
-    return 0;
+class DFlipFlop extends Digital {
+  constructor(part: Part, nodes: number[]) {
+    super(part, nodes, [0, 1], [2, 3]);
+    this.out = [0, 1];
   }
+  logic(prev: number[]): void {
+    if (this.rising(prev, 1)) this.out = [this.inLv[0], 1 - this.inLv[0]];
+  }
+  extra(): Record<string, number> {
+    return { q: this.out[0] };
+  }
+}
+
+class JkFlipFlop extends Digital {
+  constructor(part: Part, nodes: number[]) {
+    super(part, nodes, [0, 1, 2], [3, 4]);
+    this.out = [0, 1];
+  }
+  logic(prev: number[]): void {
+    if (!this.rising(prev, 1)) return;
+    const [j, , k] = this.inLv;
+    let q = this.out[0];
+    if (j && k) q = 1 - q;
+    else if (j) q = 1;
+    else if (k) q = 0;
+    this.out = [q, 1 - q];
+  }
+  extra(): Record<string, number> {
+    return { q: this.out[0] };
+  }
+}
+
+class Counter extends Digital {
+  count = 0;
+  constructor(part: Part, nodes: number[]) {
+    super(part, nodes, [0, 1], [2, 3, 4, 5]);
+  }
+  logic(prev: number[]): void {
+    const mod = this.part.params.mod === '16' ? 16 : 10;
+    if (this.inLv[1]) this.count = 0;
+    else if (this.rising(prev, 0)) this.count = (this.count + 1) % mod;
+    this.out = [0, 1, 2, 3].map((b) => (this.count >> b) & 1);
+  }
+  extra(): Record<string, number> {
+    return { count: this.count };
+  }
+  save(): unknown {
+    return { ...(super.save() as object), count: this.count };
+  }
+  load(s: unknown): void {
+    super.load(s);
+    const c = (s as { count?: number } | null)?.count;
+    if (typeof c === 'number') this.count = c;
+  }
+}
+
+/** Segments a..g for the digits 0–9 (bit 0 = a). */
+const SEGMENTS = [0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f];
+
+class Bcd7 extends Digital {
+  constructor(part: Part, nodes: number[]) {
+    super(part, nodes, [0, 1, 2, 3], [4, 5, 6, 7, 8, 9, 10]);
+    this.out = [1, 1, 1, 1, 1, 1, 0];
+  }
+  logic(): void {
+    const n = this.inLv[0] + 2 * this.inLv[1] + 4 * this.inLv[2] + 8 * this.inLv[3];
+    const bits = SEGMENTS[n] ?? 0;
+    this.out = this.out.map((_, i) => (bits >> i) & 1);
+  }
+  extra(): Record<string, number> {
+    return { value: this.inLv[0] + 2 * this.inLv[1] + 4 * this.inLv[2] + 8 * this.inLv[3] };
+  }
+}
+
+class LogicIn extends Device {
+  out = 0;
   stamp(s: Stamper): void {
     this.out = Number(this.part.params.state) === 1 ? 1 : 0;
-    this.stampOut(s);
+    const g = 1 / LOGIC_ROUT;
+    s.g(this.nodes[0], -1, g);
+    s.flow(-1, this.nodes[0], this.out * LOGIC_HIGH * g);
   }
   accept(c: Ctx): void {
-    this.cur = [this.outCurrent(c.x)];
+    this.cur = [(this.v(c.x, 0) - this.out * LOGIC_HIGH) / LOGIC_ROUT];
+  }
+  ac(s: AcStamper): void {
+    s.y(this.nodes[0], -1, 1 / LOGIC_ROUT);
   }
   extra(): Record<string, number> {
     return { out: this.out };
@@ -689,8 +1119,135 @@ class LogicOut extends Device {
     this.lvl = level(v, this.lvl);
     this.cur = [v * 1e-6];
   }
+  ac(s: AcStamper): void {
+    s.y(this.nodes[0], -1, 1e-6);
+  }
   extra(): Record<string, number> {
     return { level: this.lvl };
+  }
+}
+
+/** Behavioural NE555: two comparators, an SR flip-flop, a discharge switch and an output stage. */
+class Timer555 extends Device {
+  q = 0;
+  // Pin order: VCC, RESET, DIS, THR, TRIG, GND, OUT, CTRL
+  stamp(s: Stamper): void {
+    const [VCC, RST, DIS, THR, TRIG, GND, OUT, CTRL] = this.nodes;
+    s.g(VCC, CTRL, 1 / 5000);
+    s.g(CTRL, GND, 1 / 10000);
+    s.g(VCC, RST, 1 / 20000);
+    s.g(THR, GND, 1e-7);
+    s.g(TRIG, GND, 1e-7);
+    const g = 1 / 10;
+    if (this.q) {
+      // Output sits about 1.5 V below VCC, as on the bipolar 555.
+      s.g(OUT, VCC, g);
+      s.flow(OUT, VCC, 1.5 * g);
+      s.g(DIS, GND, 1e-9);
+    } else {
+      s.g(OUT, GND, g);
+      s.g(DIS, GND, 1 / 20);
+    }
+  }
+  accept(c: Ctx): void {
+    const x = c.x;
+    const vg = this.v(x, 5);
+    const rel = (i: number) => this.v(x, i) - vg;
+    const vcc = rel(0);
+    const ctrl = rel(7);
+    const iOut = this.q ? (this.v(x, 6) - this.v(x, 0) + 1.5) / 10 : (this.v(x, 6) - vg) / 10;
+    const iDis = this.q ? 0 : rel(2) / 20;
+    const iDiv = (vcc - ctrl) / 5000;
+    const iRst = (vcc - rel(1)) / 20000;
+    this.cur = [
+      iDiv + iRst - (this.q ? iOut : 0),
+      -iRst,
+      iDis,
+      rel(3) * 1e-7,
+      rel(4) * 1e-7,
+      0,
+      iOut,
+      -iDiv + ctrl / 10000,
+    ];
+    this.cur[5] = -this.cur.reduce((a, b) => a + b, 0);
+    if (vcc < 3 || rel(1) < 0.7) this.q = 0;
+    else if (rel(4) < ctrl / 2) this.q = 1;
+    else if (rel(3) > ctrl) this.q = 0;
+  }
+  ac(s: AcStamper): void {
+    const [VCC, RST, DIS, , , GND, OUT, CTRL] = this.nodes;
+    s.y(VCC, CTRL, 1 / 5000);
+    s.y(CTRL, GND, 1 / 10000);
+    s.y(VCC, RST, 1 / 20000);
+    s.y(OUT, this.q ? VCC : GND, 1 / 10);
+    if (!this.q) s.y(DIS, GND, 1 / 20);
+  }
+  extra(): Record<string, number> {
+    return { out: this.q };
+  }
+  save(): unknown {
+    return this.q;
+  }
+  load(s: unknown): void {
+    if (typeof s === 'number') this.q = s;
+  }
+}
+
+/** Seven LEDs to a common cathode, each through a built-in resistor (internal nodes 8..14). */
+class SevenSeg extends Device {
+  readonly nonlinear = true;
+  segs: Junction[];
+  constructor(part: Part, nodes: number[]) {
+    super(part, nodes);
+    const m = ledModel(String(part.params.color));
+    this.segs = Array.from({ length: 7 }, () => new Junction(m.Is, m.nvt));
+  }
+  rs(): number {
+    return Math.max(this.num('Rs', 330), 1e-3);
+  }
+  stamp(s: Stamper, c: Ctx): void {
+    if (this.broken) return;
+    const m = ledModel(String(this.part.params.color));
+    const com = this.nodes[7];
+    let lim = false;
+    this.segs.forEach((j, i) => {
+      j.Is = m.Is;
+      j.nvt = m.nvt;
+      const inner = this.nodes[8 + i];
+      lim = j.stamp(s, this.nodes[i], inner, this.v(c.x, i) - this.v(c.x, 8 + i)) || lim;
+      s.g(inner, com, 1 / this.rs());
+    });
+    this.limited = lim;
+  }
+  accept(c: Ctx): void {
+    const cur = this.nodes.map(() => 0);
+    if (!this.broken) {
+      let sum = 0;
+      this.segs.forEach((j, i) => {
+        const v = this.v(c.x, i) - this.v(c.x, 8 + i);
+        j.vLast = v;
+        const I = j.current(v);
+        cur[i] = I;
+        sum += I;
+      });
+      cur[7] = -sum;
+    }
+    this.cur = cur;
+  }
+  ac(s: AcStamper): void {
+    this.segs.forEach((j, i) => {
+      s.y(this.nodes[i], this.nodes[8 + i], j.g());
+      s.y(this.nodes[8 + i], this.nodes[7], 1 / this.rs());
+    });
+  }
+  limits(): Issue | null {
+    const i = Math.max(...this.cur.slice(0, 7));
+    return i > 0.06 ? { level: 'burn', key: 'burn.led', vars: { i, max: 0.02 } } : null;
+  }
+  extra(): Record<string, number> {
+    const out: Record<string, number> = {};
+    'abcdefg'.split('').forEach((ch, i) => (out[`seg_${ch}`] = Math.max(0, this.cur[i]) / 0.01));
+    return out;
   }
 }
 
@@ -701,6 +1258,9 @@ abstract class Meter extends Device {
   meanSq = 0;
   started = false;
   abstract sample(x: Float64Array): number;
+  ac(s: AcStamper): void {
+    s.y(this.nodes[0], this.nodes[1], 1e-7);
+  }
   track(c: Ctx): void {
     const s = this.sample(c.x);
     if (!this.started) {
@@ -713,8 +1273,11 @@ abstract class Meter extends Device {
     this.mean += a * (s - this.mean);
     this.meanSq += a * (s * s - this.meanSq);
   }
+  acMode(): boolean {
+    return this.part.params.mode === 'ac';
+  }
   reading(): number {
-    return this.part.params.mode === 'ac' ? Math.sqrt(Math.max(0, this.meanSq - this.mean * this.mean)) : this.mean;
+    return this.acMode() ? Math.sqrt(Math.max(0, this.meanSq - this.mean * this.mean)) : this.mean;
   }
   extra(): Record<string, number> {
     return { reading: this.reading() };
@@ -753,8 +1316,91 @@ class Ammeter extends Meter {
     this.cur = [i, -i];
     this.track(c);
   }
+  ac(s: AcStamper): void {
+    if (!this.broken) s.y(this.nodes[0], this.nodes[1], 100);
+  }
   limits(): Issue | null {
     return Math.abs(this.cur[0]) > 10 ? { level: 'burn', key: 'burn.ammeter', vars: { i: Math.abs(this.cur[0]) } } : null;
+  }
+}
+
+/**
+ * The AVO meter. Volts: 10 MΩ. Amps: 0.01 Ω with a 10 A fuse.
+ * Ohms and diode test: the meter pushes a small current from its own battery and reads V ÷ I,
+ * which is why the circuit must be switched off first.
+ */
+class Multimeter extends Meter {
+  private lastMode = '';
+  private ohmV = 0;
+  private ohmI = 0;
+  mode(): string {
+    return String(this.part.params.mode);
+  }
+  source(): { vt: number; rs: number } | null {
+    const m = this.mode();
+    if (m === 'ohm') return { vt: 1, rs: 1000 };
+    if (m === 'diode') return { vt: 3, rs: 3000 };
+    return null;
+  }
+  isAmps(): boolean {
+    return this.mode() === 'adc' || this.mode() === 'aac';
+  }
+  acMode(): boolean {
+    return this.mode() === 'vac' || this.mode() === 'aac';
+  }
+  stamp(s: Stamper): void {
+    const [p, n] = this.nodes;
+    const src = this.source();
+    if (src) {
+      s.g(p, n, 1 / src.rs);
+      s.flow(n, p, src.vt / src.rs);
+    } else if (this.isAmps()) {
+      if (!this.broken) s.g(p, n, 100);
+    } else s.g(p, n, 1e-7);
+  }
+  sample(x: Float64Array): number {
+    return this.isAmps() ? this.cur[0] : this.v(x, 0) - this.v(x, 1);
+  }
+  accept(c: Ctx): void {
+    if (this.mode() !== this.lastMode) {
+      this.lastMode = this.mode();
+      this.started = false;
+    }
+    const v = this.v(c.x, 0) - this.v(c.x, 1);
+    const src = this.source();
+    let i: number;
+    if (src) {
+      i = (v - src.vt) / src.rs;
+      this.ohmV = v;
+      this.ohmI = -i;
+    } else if (this.isAmps()) i = this.broken ? 0 : v * 100;
+    else i = v * 1e-7;
+    this.cur = [i, -i];
+    if (!src) this.track(c);
+  }
+  ac(s: AcStamper): void {
+    const src = this.source();
+    s.y(this.nodes[0], this.nodes[1], src ? 1 / src.rs : this.isAmps() ? 100 : 1e-7);
+  }
+  /** Reading in the unit of the current mode; Infinity means "OL" (over limit). */
+  reading(): number {
+    const m = this.mode();
+    if (m === 'ohm') {
+      if (this.ohmI <= 1e-11) return Infinity;
+      const r = this.ohmV / this.ohmI;
+      return r > 40e6 || r < 0 ? Infinity : r;
+    }
+    if (m === 'diode') return this.ohmV > 2.5 ? Infinity : this.ohmV;
+    return super.reading();
+  }
+  limits(): Issue | null {
+    return this.isAmps() && Math.abs(this.cur[0]) > 10 ? { level: 'burn', key: 'burn.ammeter', vars: { i: Math.abs(this.cur[0]) } } : null;
+  }
+  advice(): Issue | null {
+    const src = this.source();
+    // On a passive part the meter's own voltage can only fall between 0 and its test voltage.
+    if (src && (this.ohmV > src.vt + 0.01 || this.ohmV < -0.01 || this.ohmI < -1e-9)) return { level: 'warn', key: 'warn.ohmPowered' };
+    return null;
   }
 }
 
@@ -778,6 +1424,8 @@ export function createDevice(part: Part, nodes: number[]): Device {
   switch (part.type) {
     case 'resistor':
       return new Resistor(part, nodes);
+    case 'ldr':
+      return new Ldr(part, nodes);
     case 'lamp':
       return new Lamp(part, nodes);
     case 'switch':
@@ -793,17 +1441,26 @@ export function createDevice(part: Part, nodes: number[]): Device {
       return new AcSource(part, nodes);
     case 'funcgen':
       return new FuncGen(part, nodes);
+    case 'psu':
+      return new PowerSupply(part, nodes);
     case 'capacitor':
       return new Capacitor(part, nodes, false);
     case 'ecap':
       return new Capacitor(part, nodes, true);
     case 'inductor':
       return new Inductor(part, nodes);
+    case 'transformer':
+      return new Transformer(part, nodes);
     case 'diode':
     case 'schottky':
     case 'zener':
     case 'led':
+    case 'photodiode':
       return new Diode(part, nodes, part.type);
+    case 'scr':
+      return new Thyristor(part, nodes, false);
+    case 'triac':
+      return new Thyristor(part, nodes, true);
     case 'npn':
       return new Bjt(part, nodes, 1);
     case 'pnp':
@@ -812,6 +1469,18 @@ export function createDevice(part: Part, nodes: number[]): Device {
       return new Mosfet(part, nodes, 1);
     case 'pmos':
       return new Mosfet(part, nodes, -1);
+    case 'dff':
+      return new DFlipFlop(part, nodes);
+    case 'jkff':
+      return new JkFlipFlop(part, nodes);
+    case 'counter':
+      return new Counter(part, nodes);
+    case 'bcd7':
+      return new Bcd7(part, nodes);
+    case 'timer555':
+      return new Timer555(part, nodes);
+    case 'sevenseg':
+      return new SevenSeg(part, nodes);
     case 'logicin':
       return new LogicIn(part, nodes);
     case 'logicout':
@@ -820,6 +1489,8 @@ export function createDevice(part: Part, nodes: number[]): Device {
       return new Voltmeter(part, nodes);
     case 'ammeter':
       return new Ammeter(part, nodes);
+    case 'multimeter':
+      return new Multimeter(part, nodes);
     case 'probe':
       return new Probe(part, nodes);
     default:

@@ -7,9 +7,17 @@ import type { Engine } from '../sim/engine';
 import { fmt, fmtShort, parseValue } from '../units';
 import { SPEEDS, type App } from './app';
 import type { Board } from './board';
+import { multimeterText } from './board';
 import { symbolSvg } from './symbols';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document): T => root.querySelector(sel) as T;
+
+/** The digit a 7-segment display is showing, read back from which segments are lit. */
+function shownDigit(x: Record<string, number>): string {
+  const bits = 'abcdefg'.split('').reduce((acc, c, i) => acc | ((x[`seg_${c}`] ?? 0) > 0.3 ? 1 << i : 0), 0);
+  const i = [0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f].indexOf(bits);
+  return bits === 0 ? '—' : i >= 0 ? String(i) : '?';
+}
 
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
@@ -231,10 +239,15 @@ export class Panels {
   }
 
   private examplesMenu(anchor: HTMLElement): void {
-    const items = EXAMPLES.map(
-      (ex) =>
-        `<button data-ex="${ex.id}"><span>${esc(nameOf(ex))}</span>${ex.ref ? `<small>${t('exercise')} ${ex.ref}</small>` : ''}</button>`,
-    ).join('');
+    const items = [1, 2, 3]
+      .map((g) => {
+        const list = EXAMPLES.filter((ex) => (ex.grade ?? 1) === g);
+        if (!list.length) return '';
+        return `<div class="menu-head">${t(`grade${g}`)}</div>${list
+          .map((ex) => `<button data-ex="${ex.id}"><span>${esc(nameOf(ex))}</span>${ex.ref ? `<small>${/^\d/.test(ex.ref) ? `${t('exercise')} ` : ''}${ex.ref}</small>` : ''}</button>`)
+          .join('')}`;
+      })
+      .join('');
     popover(anchor, `<div class="menu">${items}</div>`, (el, close) => {
       el.addEventListener('click', (e) => {
         const b = (e.target as Element).closest<HTMLElement>('[data-ex]');
@@ -377,7 +390,10 @@ export class Panels {
     const p = part!;
     const def = defOf(p.type);
     const broken = app.broken.get(p.id);
-    const fields = def.params.map((d) => this.field(p, d)).join('');
+    const fields = def.params
+      .filter((d) => !d.showIf || d.showIf.values.includes(String(p.params[d.showIf.key])))
+      .map((d) => this.field(p, d))
+      .join('');
     el.innerHTML = `
       <div class="ihead">
         <svg class="iicon" viewBox="${def.box.x - 6} ${def.box.y - 6} ${def.box.w + 12} ${def.box.h + 12}"><g class="sym">${symbolSvg(p.type, p.params, app.std)}</g></svg>
@@ -489,6 +505,56 @@ export class Panels {
       case 'probe':
         rows.push([t('voltage'), () => fmt(x('v'), 'V')]);
         break;
+      case 'multimeter':
+        rows.push([t('reading'), () => multimeterText(String(p.params.mode), x('reading'))]);
+        break;
+      case 'psu':
+        rows.push(
+          [t('voltage'), () => fmt(Math.abs(r()?.v ?? 0), 'V')],
+          [t('current'), () => fmt(x('iout'), 'A')],
+          [t('mode'), () => (x('cc') ? t('modeCC') : t('modeCV'))],
+        );
+        break;
+      case 'transformer': {
+        const nv = (i: number) => {
+          const d = app.engine.byId.get(p.id);
+          return d ? app.engine.volt(d.nodes[i]) : 0;
+        };
+        rows.push(
+          [t('primaryV'), () => fmt(nv(0) - nv(1), 'V')],
+          [t('secondaryV'), () => fmt(nv(2) - nv(3), 'V')],
+          [t('primaryI'), () => fmt(x('i1'), 'A')],
+          [t('secondaryI'), () => fmt(x('i2'), 'A')],
+        );
+        break;
+      }
+      case 'scr':
+      case 'triac':
+        rows.push(
+          [t('state'), () => (x('on') ? t('conducting') : t('blocking'))],
+          [t('voltage'), () => fmt(Math.abs(r()?.v ?? 0), 'V')],
+          [t('current'), () => fmt(Math.abs(r()?.i ?? 0), 'A')],
+        );
+        break;
+      case 'timer555':
+        rows.push([t('state'), () => String(x('out'))]);
+        break;
+      case 'dff':
+      case 'jkff':
+        rows.push(['Q', () => String(x('q'))]);
+        break;
+      case 'counter':
+        rows.push([t('count'), () => String(x('count'))]);
+        break;
+      case 'bcd7':
+        rows.push([t('bcdValue'), () => String(x('value'))]);
+        break;
+      case 'sevenseg':
+        rows.push([t('digit'), () => shownDigit(r()?.extra ?? {})]);
+        break;
+      case 'bode':
+        rows.push([t('cutoff'), () => this.scope.cutoffText || '—']);
+        break;
       default:
         if (two || p.type === 'pot') {
           rows.push([t('voltage'), () => fmt(Math.abs(r()?.v ?? 0), 'V')], [t('current'), () => fmt(Math.abs(r()?.i ?? 0), 'A')]);
@@ -496,9 +562,11 @@ export class Panels {
         } else if (defOf(p.type).pins.length > 2) {
           rows.push([t('state'), () => String(x('out'))]);
         }
+        if (p.type === 'ldr') rows.push([t('resistance'), () => fmt(x('r'), 'Ω')]);
         if (p.type === 'lamp' || p.type === 'led') rows.push([t('brightness'), () => `${Math.round(Math.min(1, x('brightness')) * 100)}%`]);
     }
     if (p.type === 'logicin') rows.splice(0, rows.length, [t('state'), () => String(p.params.state)]);
+    if (p.type === 'bode') dl.insertAdjacentHTML('beforebegin', `<p class="muted small">${t('bodeHint')}</p>`);
     dl.innerHTML = rows.map((_, i) => `<dt>${esc(rows[i][0])}</dt><dd data-r="${i}"></dd>`).join('');
     rows.forEach(([, get], i) => this.live.push({ el: $(`[data-r="${i}"]`, dl), get }));
   }
@@ -588,10 +656,19 @@ export class Panels {
 
 // ---------------------------------------------------------------- oscilloscope
 
-const WINDOWS = [0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5];
+const WINDOWS = [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5];
 const SAMPLES = 800;
 const CH_COLORS = ['#f5c542', '#4fc3f7'];
+const SCREEN_BG = '#0b1a16';
+const GRID_LINE = 'rgba(120,200,170,0.16)';
 
+interface BodePoint {
+  f: number;
+  db: number;
+  phase: number;
+}
+
+/** Oscilloscope and, when the circuit has a Bode plotter, its frequency-response screen. */
 class Scope {
   private el = $('#scope');
   private canvas!: HTMLCanvasElement;
@@ -603,29 +680,66 @@ class Scope {
   private head = 0;
   private lastT = -1;
   private probes: (string | null)[] = [null, null];
+  private tab: 'scope' | 'bode' = 'scope';
+  private hasBode = false;
+  private bode: BodePoint[] = [];
+  private bodeAt = 0;
+  private bodeDirty = true;
+  private hoverX: number | null = null;
+  cutoffText = '';
 
   constructor(private app: App) {
     this.build();
     app.stepHooks.push((e) => this.sample(e));
-    app.on('doc', () => this.findProbes());
+    app.on('doc', () => {
+      this.findProbes();
+      this.bodeDirty = true;
+      const has = app.doc.parts.some((p) => p.type === 'bode');
+      if (has !== this.hasBode) {
+        this.hasBode = has;
+        if (has) this.tab = 'bode';
+        else this.tab = 'scope';
+        this.build();
+      }
+    });
     this.findProbes();
+    this.hasBode = app.doc.parts.some((p) => p.type === 'bode');
     this.sync();
   }
 
   build(): void {
+    const tabs = this.hasBode
+      ? `<div class="tabs"><button data-tab="scope" class="${this.tab === 'scope' ? 'on' : ''}">${t('scopeTab')}</button><button data-tab="bode" class="${this.tab === 'bode' ? 'on' : ''}">${t('bodeTab')}</button></div>`
+      : `<h2>${t('scope')}</h2>`;
+    const scopeHead = `<div class="legend"><span class="ch ch1">CH1</span><b id="ch1v" dir="ltr">—</b><span class="ch ch2">CH2</span><b id="ch2v" dir="ltr">—</b></div>
+        <label class="field"><span>${t('window')}</span><select id="scope-win">${WINDOWS.map((w) => `<option value="${w}">${fmt(w, 's')}</option>`).join('')}</select></label>`;
+    const bodeHead = `<div class="legend"><span class="ch ch1">${t('gain')}</span><span class="ch ch2">${t('phase')}</span><b id="bode-read" dir="ltr"></b></div><b class="cutoff" id="bode-fc"></b>`;
     this.el.innerHTML = `
       <div class="scope-head">
-        <h2>${t('scope')}</h2>
-        <div class="legend"><span class="ch ch1">CH1</span><b id="ch1v" dir="ltr">—</b><span class="ch ch2">CH2</span><b id="ch2v" dir="ltr">—</b></div>
-        <label class="field"><span>${t('window')}</span><select id="scope-win">${WINDOWS.map((w) => `<option value="${w}">${fmt(w, 's')}</option>`).join('')}</select></label>
+        ${tabs}
+        ${this.tab === 'scope' ? scopeHead : bodeHead}
         <button class="icon-btn" data-scope="close" title="${t('close')}">${icon('close')}</button>
       </div>
-      <div class="screen"><canvas></canvas><p class="scope-empty" hidden>${t('noProbes')}</p></div>`;
+      <div class="screen"><canvas></canvas><p class="scope-empty" hidden></p></div>`;
     this.canvas = this.el.querySelector('canvas')!;
-    const sel = $<HTMLSelectElement>('#scope-win', this.el);
-    sel.value = String(this.win);
-    sel.addEventListener('change', () => this.setWindow(Number(sel.value)));
+    const sel = document.querySelector<HTMLSelectElement>('#scope-win');
+    if (sel) {
+      sel.value = String(this.win);
+      sel.addEventListener('change', () => this.setWindow(Number(sel.value)));
+    }
     this.el.querySelector('[data-scope="close"]')!.addEventListener('click', () => this.app.setOption('scopeOpen', false));
+    this.el.querySelectorAll<HTMLElement>('[data-tab]').forEach((b) =>
+      b.addEventListener('click', () => {
+        this.tab = b.dataset.tab as 'scope' | 'bode';
+        this.bodeDirty = true;
+        this.build();
+      }),
+    );
+    this.canvas.addEventListener('pointermove', (e) => {
+      const r = this.canvas.getBoundingClientRect();
+      this.hoverX = (e.clientX - r.left) * (window.devicePixelRatio || 1);
+    });
+    this.canvas.addEventListener('pointerleave', () => (this.hoverX = null));
   }
 
   sync(): void {
@@ -634,9 +748,9 @@ class Scope {
   }
 
   setWindow(w: number): void {
-    this.win = w;
+    this.win = WINDOWS.includes(w) ? w : WINDOWS.reduce((a, b) => (Math.abs(b - w) < Math.abs(a - w) ? b : a));
     const sel = document.querySelector<HTMLSelectElement>('#scope-win');
-    if (sel) sel.value = String(w);
+    if (sel) sel.value = String(this.win);
     this.clear();
   }
 
@@ -667,8 +781,7 @@ class Scope {
     this.count = Math.min(this.count + 1, SAMPLES);
   }
 
-  draw(): void {
-    if (!this.app.scopeOpen) return;
+  private screen(): { g: CanvasRenderingContext2D; W: number; H: number; dpr: number } {
     const cv = this.canvas;
     const r = cv.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
@@ -678,11 +791,27 @@ class Scope {
     }
     const g = cv.getContext('2d')!;
     g.direction = 'ltr';
-    const W = cv.width;
-    const H = cv.height;
-    g.fillStyle = '#0b1a16';
-    g.fillRect(0, 0, W, H);
-    g.strokeStyle = 'rgba(120,200,170,0.16)';
+    g.fillStyle = SCREEN_BG;
+    g.fillRect(0, 0, cv.width, cv.height);
+    return { g, W: cv.width, H: cv.height, dpr };
+  }
+
+  private empty(msg: string | null): void {
+    const p = this.el.querySelector<HTMLElement>('.scope-empty')!;
+    p.hidden = !msg;
+    if (msg) p.textContent = msg;
+  }
+
+  draw(): void {
+    if (this.hasBode) this.updateBode();
+    if (!this.app.scopeOpen) return;
+    if (this.tab === 'bode') this.drawBode();
+    else this.drawScope();
+  }
+
+  private drawScope(): void {
+    const { g, W, H, dpr } = this.screen();
+    g.strokeStyle = GRID_LINE;
     g.lineWidth = 1;
     for (let i = 1; i < 10; i++) {
       const x = Math.round((W * i) / 10) + 0.5;
@@ -705,7 +834,7 @@ class Scope {
     g.stroke();
 
     const empty = !this.probes[0] && !this.probes[1];
-    this.el.querySelector<HTMLElement>('.scope-empty')!.hidden = !empty;
+    this.empty(empty ? t('noProbes') : null);
     if (empty || this.count < 2) return;
 
     const tEnd = this.tBuf[(this.head - 1 + SAMPLES) % SAMPLES];
@@ -726,7 +855,7 @@ class Scope {
       }
     }
     // Each channel gets its own volts/div, like the knobs on a real oscilloscope.
-    const perDiv = stats.map((s) => niceDiv(s.abs / 3.6));
+    const perDiv = stats.map((st) => niceDiv(st.abs / 3.6));
     g.lineWidth = 2 * dpr;
     for (let c = 0; c < 2; c++) {
       if (!this.has[c]) continue;
@@ -761,10 +890,138 @@ class Scope {
     for (let c = 0; c < 2; c++) {
       const out = document.getElementById(`ch${c + 1}v`);
       if (!out) continue;
-      const s = stats[c];
-      out.textContent = this.has[c] && Number.isFinite(s.max) ? `${fmt(s.max, 'V')} / ${fmt(s.min, 'V')} · p-p ${fmt(s.max - s.min, 'V')}` : '—';
+      const st = stats[c];
+      out.textContent = this.has[c] && Number.isFinite(st.max) ? `${fmt(st.max, 'V')} / ${fmt(st.min, 'V')} · p-p ${fmt(st.max - st.min, 'V')}` : '—';
     }
   }
+
+  /** Re-run the frequency sweep when the circuit changed, and now and then while it runs. */
+  private updateBode(): void {
+    const now = performance.now();
+    if (!this.bodeDirty && now - this.bodeAt < 1000) return;
+    this.bodeDirty = false;
+    this.bodeAt = now;
+    const app = this.app;
+    const bp = app.doc.parts.find((p) => p.type === 'bode');
+    const src = app.doc.parts.find((p) => p.type === 'funcgen' || p.type === 'ac');
+    if (!bp || !src) {
+      this.bode = [];
+      this.cutoffText = '';
+      return;
+    }
+    const nodes = app.engine.net.pinNodes.get(bp.id)!;
+    const fmin = Math.max(1e-3, Number(bp.params.fmin) || 1);
+    const fmax = Math.max(fmin * 10, Number(bp.params.fmax) || 1e5);
+    const freqs = Array.from({ length: 160 }, (_, i) => fmin * Math.pow(fmax / fmin, i / 159));
+    this.bode = app.engine.acSweep(src.id, nodes[0], nodes[1], freqs);
+    const fc = cutoffs(this.bode);
+    this.cutoffText = fc.map((f) => fmt(f, 'Hz')).join(' ، ');
+  }
+
+  private drawBode(): void {
+    const { g, W, H, dpr } = this.screen();
+    const pts = this.bode;
+    const bp = this.app.doc.parts.find((p) => p.type === 'bode');
+    this.empty(pts.length < 2 ? t('bodeNoSource') : null);
+    const fcEl = document.getElementById('bode-fc');
+    if (fcEl) fcEl.textContent = this.cutoffText ? `${t('cutoff')}: ${this.cutoffText}` : '';
+    if (!bp || pts.length < 2) return;
+
+    const L = 46 * dpr;
+    const R = W - 46 * dpr;
+    const T = 10 * dpr;
+    const B = H - 22 * dpr;
+    const f0 = pts[0].f;
+    const f1 = pts[pts.length - 1].f;
+    const xf = (f: number) => L + ((Math.log10(f) - Math.log10(f0)) / (Math.log10(f1) - Math.log10(f0))) * (R - L);
+    const dbs = pts.map((p) => p.db);
+    const top = Math.ceil(Math.max(...dbs) / 10) * 10 + (Math.max(...dbs) % 10 === 0 ? 10 : 0);
+    let bottom = Math.max(Math.floor(Math.min(...dbs) / 10) * 10, top - 80);
+    if (top - bottom < 30) bottom = top - 30;
+    const yDb = (d: number) => T + ((top - Math.max(bottom, Math.min(top, d))) / (top - bottom)) * (B - T);
+    const yPh = (ph: number) => T + ((180 - ph) / 360) * (B - T);
+
+    g.font = `${11 * dpr}px "IBM Plex Mono", monospace`;
+    g.lineWidth = 1;
+    g.strokeStyle = GRID_LINE;
+    g.fillStyle = 'rgba(200,240,225,0.75)';
+    g.textAlign = 'center';
+    for (let e = Math.ceil(Math.log10(f0)); e <= Math.floor(Math.log10(f1)); e++) {
+      const x = Math.round(xf(10 ** e)) + 0.5;
+      g.beginPath();
+      g.moveTo(x, T);
+      g.lineTo(x, B);
+      g.stroke();
+      g.fillText(fmt(10 ** e, 'Hz'), x, H - 6 * dpr);
+    }
+    g.textAlign = 'right';
+    for (let d = bottom; d <= top; d += 10) {
+      const y = Math.round(yDb(d)) + 0.5;
+      g.beginPath();
+      g.moveTo(L, y);
+      g.lineTo(R, y);
+      g.stroke();
+      g.fillStyle = CH_COLORS[0];
+      g.fillText(`${d} dB`, L - 4 * dpr, y + 4 * dpr);
+    }
+    g.textAlign = 'left';
+    g.fillStyle = CH_COLORS[1];
+    for (const ph of [180, 90, 0, -90, -180]) g.fillText(`${ph}°`, R + 4 * dpr, yPh(ph) + 4 * dpr);
+
+    const curve = (color: string, y: (p: BodePoint) => number, dash: number[]) => {
+      g.strokeStyle = color;
+      g.lineWidth = 2 * dpr;
+      g.setLineDash(dash);
+      g.beginPath();
+      pts.forEach((p, i) => (i ? g.lineTo(xf(p.f), y(p)) : g.moveTo(xf(p.f), y(p))));
+      g.stroke();
+      g.setLineDash([]);
+    };
+    curve(CH_COLORS[1], (p) => yPh(p.phase), [6 * dpr, 4 * dpr]);
+    curve(CH_COLORS[0], (p) => yDb(p.db), []);
+
+    g.strokeStyle = '#e48b5c';
+    g.lineWidth = 1.5 * dpr;
+    g.setLineDash([4 * dpr, 3 * dpr]);
+    for (const f of cutoffs(pts)) {
+      const x = xf(f);
+      g.beginPath();
+      g.moveTo(x, T);
+      g.lineTo(x, B);
+      g.stroke();
+    }
+    g.setLineDash([]);
+
+    const read = document.getElementById('bode-read');
+    if (this.hoverX !== null && this.hoverX >= L && this.hoverX <= R) {
+      const f = 10 ** (Math.log10(f0) + ((this.hoverX - L) / (R - L)) * (Math.log10(f1) - Math.log10(f0)));
+      const p = pts.reduce((a, b) => (Math.abs(Math.log(b.f / f)) < Math.abs(Math.log(a.f / f)) ? b : a));
+      g.strokeStyle = 'rgba(255,255,255,0.5)';
+      g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(xf(p.f), T);
+      g.lineTo(xf(p.f), B);
+      g.stroke();
+      if (read) read.textContent = `${fmt(p.f, 'Hz')}  ${p.db.toFixed(1)} dB  ${p.phase.toFixed(0)}°`;
+    } else if (read) read.textContent = '';
+  }
+}
+
+/** Frequencies where the gain is 3 dB below its peak (one for low/high-pass, two for band filters). */
+function cutoffs(pts: BodePoint[]): number[] {
+  if (pts.length < 2) return [];
+  const peak = Math.max(...pts.map((p) => p.db));
+  const level = peak - 3;
+  const out: number[] = [];
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    if ((a.db - level) * (b.db - level) < 0) {
+      const k = (level - a.db) / (b.db - a.db);
+      out.push(10 ** (Math.log10(a.f) + k * (Math.log10(b.f) - Math.log10(a.f))));
+    }
+  }
+  return out.slice(0, 2);
 }
 
 function niceDiv(v: number): number {
@@ -790,14 +1047,22 @@ class LessonRunner {
   ) {}
 
   chooser(): void {
-    const items = LESSONS.map(
-      (l) => `<button class="lesson-item" data-l="${l.id}">
+    const items = [1, 2, 3]
+      .map((g) => {
+        const list = LESSONS.filter((l) => l.grade === g);
+        if (!list.length) return '';
+        return `<h3 class="grade-head">${t(`grade${g}`)}</h3>${list
+          .map(
+            (l) => `<button class="lesson-item" data-l="${l.id}">
         <span class="lref">${t('exercise')} ${l.ref}</span>
         <strong>${esc(nameOf(l))}</strong>
         <span class="lgoal">${esc(nameOf(l.goal))}</span>
       </button>`,
-    ).join('');
-    modal(`<h2>${t('lessons')} · ${t('grade1')}</h2><div class="lesson-list">${items}</div>`, (el, close) => {
+          )
+          .join('')}`;
+      })
+      .join('');
+    modal(`<h2>${t('lessons')}</h2><div class="lesson-list">${items}</div>`, (el, close) => {
       el.addEventListener('click', (e) => {
         const b = (e.target as Element).closest<HTMLElement>('[data-l]');
         if (!b) return;
