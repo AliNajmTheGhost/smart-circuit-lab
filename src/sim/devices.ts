@@ -320,6 +320,28 @@ class FuncGen extends Battery {
       case 'fm':
         w = Math.sin(TAU * f * t + (this.num('dev', 50) / fm) * Math.sin(TAU * fm * t));
         break;
+      case 'pam': {
+        const m = this.num('m', 0.5);
+        w = phase < this.num('duty', 0.5) ? (1 + m * Math.sin(TAU * fm * t)) / (1 + m) : 0;
+        break;
+      }
+      case 'ppm': {
+        // Fixed-width pulse whose position inside each period follows the message.
+        const width = this.num('duty', 0.1);
+        const start = (0.5 - width / 2) * (1 + 0.8 * Math.sin(TAU * fm * t));
+        w = phase >= start && phase < start + width ? 1 : 0;
+        break;
+      }
+      case 'ask':
+        w = dataBit(t, fm) * Math.sin(TAU * f * t);
+        break;
+      case 'fsk':
+        // Continuous phase: the frequency is f for a 0 and f + dev for a 1.
+        w = Math.sin(TAU * (f * t + this.num('dev', 50) * onesTime(t, fm)));
+        break;
+      case 'psk':
+        w = Math.sin(TAU * f * t + Math.PI * dataBit(t, fm));
+        break;
       default:
         w = Math.sin(TAU * phase);
     }
@@ -328,6 +350,24 @@ class FuncGen extends Battery {
   advice(): Issue | null {
     return null;
   }
+}
+
+/** The data sent by the digital modulations: a fixed 16-bit pattern repeated at `rate` bits per second. */
+const DATA = [1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1, 0];
+const DATA_ONES = DATA.reduce((a, b) => a + b, 0);
+const DATA_PREFIX = DATA.reduce<number[]>((acc, b, i) => (acc.push((acc[i] ?? 0) + b), acc), [0]);
+
+function dataBit(t: number, rate: number): number {
+  return DATA[Math.floor(t * rate) % DATA.length];
+}
+
+/** Total time spent sending 1 bits up to t, so FSK phase stays continuous. */
+function onesTime(t: number, rate: number): number {
+  const k = Math.floor(t * rate);
+  const cycles = Math.floor(k / DATA.length);
+  const inCycle = k % DATA.length;
+  const whole = cycles * DATA_ONES + DATA_PREFIX[inCycle];
+  return whole / rate + DATA[inCycle] * (t - k / rate);
 }
 
 /** Bench power supply: constant voltage until the load asks for more than the current limit. */
@@ -1404,6 +1444,233 @@ class Multimeter extends Meter {
   }
 }
 
+/**
+ * Op-amp with its supply built in: very high gain with one pole (gain-bandwidth product),
+ * output that saturates smoothly at ±Vsat, 2 MΩ input and 75 Ω output resistance.
+ */
+class OpAmp extends Device {
+  readonly nonlinear = true;
+  /** Internal gain-stage voltage, the part's memory between steps. */
+  vint = 0;
+  private vdLast = 0;
+  readonly rout = 75;
+  readonly rin = 2e6;
+  cfg(): { A: number; vs: number; tau: number } {
+    const A = Math.max(this.num('A', 1e5), 10);
+    return { A, vs: Math.max(this.num('Vsat', 13), 0.5), tau: A / (2 * Math.PI * Math.max(this.num('GBW', 1e6), 1)) };
+  }
+  core(vd: number, dt: number): { vi: number; out: number; dout: number } {
+    const { A, vs, tau } = this.cfg();
+    const k = dt / tau;
+    const vi = (this.vint + k * A * vd) / (1 + k);
+    const th = Math.tanh(vi / vs);
+    return { vi, out: vs * th, dout: (1 - th * th) * ((k * A) / (1 + k)) };
+  }
+  stamp(s: Stamper, c: Ctx): void {
+    const [nm, np, out] = this.nodes;
+    s.g(np, nm, 1 / this.rin);
+    const raw = this.v(c.x, 1) - this.v(c.x, 0);
+    const vd = stepLimit(raw, this.vdLast, 0.5);
+    this.limited = Math.abs(vd - raw) > 1e-12;
+    this.vdLast = vd;
+    const m = this.core(vd, c.dt);
+    const vo = this.v(c.x, 2);
+    const g = 1 / this.rout;
+    s.lin(
+      [out],
+      [(vo - m.out) * g],
+      [
+        [out, -1, vo],
+        [np, nm, vd],
+      ],
+      [[g, -m.dout * g]],
+    );
+  }
+  accept(c: Ctx): void {
+    const vd = this.v(c.x, 1) - this.v(c.x, 0);
+    this.vdLast = vd;
+    const m = this.core(vd, c.dt);
+    const { vs } = this.cfg();
+    // Keep the internal stage from winding up far past saturation.
+    this.vint = Math.max(-4 * vs, Math.min(4 * vs, m.vi));
+    const iin = vd / this.rin;
+    this.cur = [-iin, iin, (this.v(c.x, 2) - m.out) / this.rout];
+  }
+  ac(s: AcStamper, w: number): void {
+    const [nm, np, out] = this.nodes;
+    const { A, vs, tau } = this.cfg();
+    const th = Math.tanh(this.vint / vs);
+    const a = A * (1 - th * th);
+    const den = 1 + w * w * tau * tau;
+    const g = 1 / this.rout;
+    s.y(np, nm, 1 / this.rin);
+    s.y(out, -1, g);
+    // A(jω) = a / (1 + jωτ)
+    s.trans(out, np, nm, (-g * a) / den, (g * a * w * tau) / den);
+  }
+  extra(): Record<string, number> {
+    return { vd: this.vdLast };
+  }
+  save(): unknown {
+    return this.vint;
+  }
+  load(s: unknown): void {
+    if (typeof s === 'number') this.vint = s;
+  }
+}
+
+/** 4-bit A/D converter: samples VIN on each rising clock edge, or continuously if no clock arrives. */
+class Adc extends Digital {
+  code = 0;
+  private vin = 0;
+  private clocked = false;
+  constructor(part: Part, nodes: number[]) {
+    super(part, nodes, [1], [2, 3, 4, 5]);
+  }
+  stamp(s: Stamper): void {
+    super.stamp(s);
+    s.g(this.nodes[0], -1, 1e-7);
+  }
+  accept(c: Ctx): void {
+    this.vin = this.v(c.x, 0);
+    super.accept(c);
+    this.cur[0] = this.vin * 1e-7;
+  }
+  logic(prev: number[]): void {
+    if (this.rising(prev, 0)) this.clocked = true;
+    if (!this.clocked || this.rising(prev, 0)) {
+      const vref = Math.max(this.num('Vref', 5), 0.1);
+      this.code = Math.max(0, Math.min(15, Math.floor((this.vin / vref) * 16)));
+    }
+    this.out = [0, 1, 2, 3].map((b) => (this.code >> b) & 1);
+  }
+  extra(): Record<string, number> {
+    return { code: this.code };
+  }
+}
+
+/** 4-bit D/A converter: VOUT = Vref × code ÷ 16, behind 10 Ω. */
+class Dac extends Digital {
+  code = 0;
+  constructor(part: Part, nodes: number[]) {
+    super(part, nodes, [0, 1, 2, 3], []);
+  }
+  vout(): number {
+    return (Math.max(this.num('Vref', 5), 0.1) * this.code) / 16;
+  }
+  stamp(s: Stamper): void {
+    super.stamp(s);
+    const o = this.nodes[4];
+    s.g(o, -1, 0.1);
+    s.flow(-1, o, this.vout() * 0.1);
+  }
+  accept(c: Ctx): void {
+    super.accept(c);
+    this.cur[4] = (this.v(c.x, 4) - this.vout()) * 0.1;
+  }
+  logic(): void {
+    this.code = this.inLv[0] + 2 * this.inLv[1] + 4 * this.inLv[2] + 8 * this.inLv[3];
+  }
+  ac(s: AcStamper): void {
+    super.ac(s);
+    s.y(this.nodes[4], -1, 0.1);
+  }
+  extra(): Record<string, number> {
+    return { code: this.code, vout: this.vout() };
+  }
+}
+
+/**
+ * Lossless (or lightly lossy) transmission line by the method of characteristics:
+ * each end looks like Z0 in series with the wave that left the other end Td seconds ago.
+ */
+class TLine extends Device {
+  private ts: number[] = [];
+  private hist: [number, number, number, number][] = [];
+  private e: [number, number] = [0, 0];
+  cfg(dt: number): { z0: number; td: number; k: number } {
+    return {
+      z0: Math.max(this.num('Z0', 75), 1e-3),
+      td: Math.max(this.num('Td', 100e-6), dt),
+      k: Math.pow(10, -Math.max(0, this.num('loss', 0)) / 20),
+    };
+  }
+  /** Port voltages and currents Td ago (zero before the line was energised). */
+  private past(t: number): [number, number, number, number] {
+    const ts = this.ts;
+    if (!ts.length || t < ts[0]) return [0, 0, 0, 0];
+    let lo = 0;
+    let hi = ts.length - 1;
+    if (t >= ts[hi]) return this.hist[hi];
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (ts[mid] <= t) lo = mid;
+      else hi = mid;
+    }
+    const f = (t - ts[lo]) / (ts[hi] - ts[lo] || 1);
+    const a = this.hist[lo];
+    const b = this.hist[hi];
+    return [0, 1, 2, 3].map((i) => a[i] + f * (b[i] - a[i])) as [number, number, number, number];
+  }
+  private waves(t: number, dt: number): [number, number] {
+    const { z0, td, k } = this.cfg(dt);
+    const [v1, i1, v2, i2] = this.past(t - td);
+    return [k * (v2 + z0 * i2), k * (v1 + z0 * i1)];
+  }
+  stamp(s: Stamper, c: Ctx): void {
+    const { z0 } = this.cfg(c.dt);
+    const g = 1 / z0;
+    const [a1, a2, b1, b2] = this.nodes;
+    this.e = this.waves(c.t, c.dt);
+    s.g(a1, a2, g);
+    s.flow(a1, a2, -g * this.e[0]);
+    s.g(b1, b2, g);
+    s.flow(b1, b2, -g * this.e[1]);
+  }
+  accept(c: Ctx): void {
+    const { z0, td } = this.cfg(c.dt);
+    const v1 = this.v(c.x, 0) - this.v(c.x, 1);
+    const v2 = this.v(c.x, 2) - this.v(c.x, 3);
+    const i1 = (v1 - this.e[0]) / z0;
+    const i2 = (v2 - this.e[1]) / z0;
+    this.cur = [i1, -i1, i2, -i2];
+    this.ts.push(c.t);
+    this.hist.push([v1, i1, v2, i2]);
+    // Forget what is older than the delay needs.
+    let drop = 0;
+    while (drop < this.ts.length - 2 && this.ts[drop + 1] < c.t - td * 1.5) drop++;
+    if (drop > 256) {
+      this.ts.splice(0, drop);
+      this.hist.splice(0, drop);
+    }
+  }
+  ac(s: AcStamper, w: number): void {
+    const { z0, td, k } = this.cfg(1e-9);
+    const alpha = Math.max(1e-6, -Math.log(k));
+    const th = w * td;
+    // sinh and cosh of γl = α + jθ
+    const sh: [number, number] = [Math.sinh(alpha) * Math.cos(th), Math.cosh(alpha) * Math.sin(th)];
+    const ch: [number, number] = [Math.cosh(alpha) * Math.cos(th), Math.sinh(alpha) * Math.sin(th)];
+    const den = sh[0] ** 2 + sh[1] ** 2;
+    const coth: [number, number] = [(ch[0] * sh[0] + ch[1] * sh[1]) / den, (ch[1] * sh[0] - ch[0] * sh[1]) / den];
+    const csch: [number, number] = [sh[0] / den, -sh[1] / den];
+    const [a1, a2, b1, b2] = this.nodes;
+    const y11: [number, number] = [coth[0] / z0, coth[1] / z0];
+    const y12: [number, number] = [-csch[0] / z0, -csch[1] / z0];
+    const ports: [number, number][] = [
+      [a1, a2],
+      [b1, b2],
+    ];
+    ports.forEach(([p, n], i) => {
+      ports.forEach(([q, m], j) => {
+        const y = i === j ? y11 : y12;
+        s.trans(p, q, m, y[0], y[1]);
+        s.trans(n, q, m, -y[0], -y[1]);
+      });
+    });
+  }
+}
+
 class Probe extends Device {
   value = 0;
   stamp(): void {}
@@ -1479,6 +1746,14 @@ export function createDevice(part: Part, nodes: number[]): Device {
       return new Bcd7(part, nodes);
     case 'timer555':
       return new Timer555(part, nodes);
+    case 'opamp':
+      return new OpAmp(part, nodes);
+    case 'adc':
+      return new Adc(part, nodes);
+    case 'dac':
+      return new Dac(part, nodes);
+    case 'tline':
+      return new TLine(part, nodes);
     case 'sevenseg':
       return new SevenSeg(part, nodes);
     case 'logicin':

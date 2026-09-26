@@ -486,7 +486,131 @@ export const EXAMPLES: Example[] = [
       return b.done();
     },
   },
+  opampExample('opamp-inv', 'مكبر العمليات العاكس (الكسب −10)', 'Inverting op-amp amplifier (gain −10)', 'الوحدة 1', 'resistor', { R: 1000 }, { R: 10000 }, { wave: 'sine', Vp: 0.5, f: 1000 }),
+  opampExample('integrator', 'دائرة المكامل بمكبر العمليات', 'Op-amp integrator', '12', 'resistor', { R: 10000 }, { C: 100e-9 }, { wave: 'square', Vp: 1, f: 1000 }),
+  opampExample('differentiator', 'دائرة المفاضل بمكبر العمليات', 'Op-amp differentiator', '11', 'capacitor', { C: 100e-9 }, { R: 10000 }, { wave: 'triangle', Vp: 1, f: 1000 }),
+  {
+    id: 'adc-dac',
+    grade: 3,
+    ar: 'التحويل التماثلي ↔ الرقمي',
+    en: 'Analogue ↔ digital conversion',
+    ref: '13–14',
+    scopeWindow: 0.2,
+    build() {
+      const b = new Builder('التحويل A/D و D/A');
+      b.add('funcgen', 0, 40, 0, { wave: 'sine', Vp: 2.4, offset: 2.5, f: 5, r: 1 });
+      b.add('ground', 0, 80);
+      b.add('funcgen', 60, 120, 0, { wave: 'pulse', Vp: 5, f: 100, duty: 0.5, r: 1 });
+      b.add('ground', 60, 160);
+      b.add('adc', 180, 0);
+      b.add('dac', 360, 0);
+      b.add('probe', 0, -20, 0, { ch: '1' });
+      b.add('probe', 420, -20, 0, { ch: '2' });
+      b.path(P(0, 0), P(0, -20), P(120, -20));
+      b.path(P(60, 80), P(60, 20), P(120, 20));
+      for (const y of [-40, -20, 0, 20]) b.path(P(240, y), P(300, y));
+      return b.done();
+    },
+  },
+  {
+    id: 'tline',
+    grade: 2,
+    ar: 'خط النقل: الانعكاس والتأخير',
+    en: 'Transmission line: delay and reflection',
+    ref: 'الوحدة 5',
+    scopeWindow: 0.001,
+    build() {
+      const b = new Builder('خط النقل');
+      b.add('funcgen', 0, 40, 0, { wave: 'pulse', Vp: 5, f: 500, duty: 0.1, r: 75 });
+      b.add('ground', 0, 80);
+      b.add('tline', 240, 0, 0, { Z0: 75, Td: 100e-6 });
+      b.add('resistor', 380, 20, 1, { R: 75 });
+      b.add('probe', 0, -20, 0, { ch: '1' });
+      b.add('probe', 380, -20, 0, { ch: '2' });
+      b.path(P(0, 0), P(0, -20), P(180, -20));
+      b.path(P(180, 20), P(180, 80), P(0, 80));
+      b.path(P(300, -20), P(380, -20));
+      b.path(P(300, 20), P(300, 80), P(180, 80));
+      b.path(P(380, 60), P(380, 80), P(300, 80));
+      return b.done();
+    },
+  },
+  twoSources('pulse-mod', 'التضمين النبضي PAM و PPM', 'Pulse modulation PAM and PPM', '15–18', { wave: 'pam', Vp: 5, f: 1000, fm: 50, m: 0.6, duty: 0.3 }, { wave: 'ppm', Vp: 5, f: 1000, fm: 50, duty: 0.1 }, 0.05),
+  twoSources('digital-mod', 'التضمين الرقمي ASK و FSK', 'Digital modulation ASK and FSK', '19–20', { wave: 'ask', Vp: 2, f: 2000, fm: 200 }, { wave: 'fsk', Vp: 2, f: 1000, fm: 200, dev: 1000 }, 0.02),
 ];
+
+/** Two generators, each loaded by 1 kΩ and watched on its own oscilloscope channel. */
+function twoSources(id: string, ar: string, en: string, ref: string, a: Record<string, string | number>, c: Record<string, string | number>, scopeWindow: number): Example {
+  return {
+    id,
+    grade: 3,
+    ar,
+    en,
+    ref,
+    scopeWindow,
+    build() {
+      const b = new Builder(ar);
+      [a, c].forEach((params, i) => {
+        const x = i * 200;
+        b.add('funcgen', x, 0, 0, { ...params, r: 50 });
+        b.add('ground', x, 40);
+        b.add('resistor', x + 100, 0, 1, { R: 1000 });
+        b.add('probe', x, -60, 0, { ch: String(i + 1) });
+        b.path(P(x, -40), P(x, -60), P(x + 100, -60), P(x + 100, -40));
+        b.path(P(x + 100, 40), P(x, 40));
+      });
+      return b.done();
+    },
+  };
+}
+
+/**
+ * Inverting op-amp stage: input part from the generator to IN−, feedback part from IN− to the output.
+ * The integrator also gets 1 MΩ across its capacitor so its output does not drift.
+ */
+function opampExample(
+  id: string,
+  ar: string,
+  en: string,
+  ref: string,
+  inType: string,
+  inParams: Record<string, number>,
+  fbParams: Record<string, number>,
+  source: Record<string, string | number>,
+): Example {
+  return {
+    id,
+    grade: 2,
+    ar,
+    en,
+    ref,
+    scopeWindow: 0.005,
+    build() {
+      const b = new Builder(ar);
+      b.add('funcgen', 0, 40, 0, { ...source, r: 50 });
+      b.add('ground', 0, 80);
+      b.add(inType, 100, -20, 0, inParams);
+      b.add('opamp', 200, 0);
+      b.add('ground', 160, 20);
+      const fbType = 'C' in fbParams ? 'capacitor' : 'resistor';
+      b.add(fbType, 200, -80, 0, fbParams);
+      if (fbType === 'capacitor') {
+        b.add('resistor', 200, -140, 0, { R: 1e6 });
+        b.path(P(160, -80), P(160, -140));
+        b.path(P(240, -80), P(240, -140));
+      }
+      b.add('resistor', 280, 40, 1, { R: 10000 });
+      b.add('ground', 280, 80);
+      b.add('probe', 0, -20, 0, { ch: '1' });
+      b.add('probe', 280, 0, 0, { ch: '2' });
+      b.path(P(0, 0), P(0, -20), P(60, -20));
+      b.path(P(140, -20), P(160, -20));
+      b.path(P(160, -20), P(160, -80));
+      b.path(P(240, -80), P(240, 0), P(280, 0));
+      return b.done();
+    },
+  };
+}
 
 function filterExample(id: string, ar: string, en: string, ref: string, series: string, shunt: string): Example {
   const value = (type: string): Record<string, number> => (type === 'resistor' ? { R: 1000 } : { C: 100e-9 });

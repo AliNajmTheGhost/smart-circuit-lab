@@ -244,6 +244,42 @@ export function symbolSvg(type: string, params: Record<string, ParamValue>, std:
       );
     case 'probe':
       return L(0, 0, 0, -18) + `<polygon class="probe" points="0,-18 -12,-30 -12,-44 12,-44 12,-30"/>`;
+    case 'opamp':
+      return (
+        L(-40, -20, -24, -20) +
+        L(-40, 20, -24, 20) +
+        P('M-24 -32 L30 0 L-24 32 Z', ' class="bg"') +
+        L(30, 0, 40, 0) +
+        L(-19, -20, -11, -20, ' stroke-width="1.6"') +
+        L(-19, 20, -11, 20, ' stroke-width="1.6"') +
+        L(-15, 16, -15, 24, ' stroke-width="1.6"')
+      );
+    case 'adc':
+    case 'dac': {
+      const adc = type === 'adc';
+      let out = icBox(-40, -52, 80, 84, adc ? 'A/D' : 'D/A');
+      if (adc) {
+        out += L(-60, -20, -40, -20) + T(-28, -16, 'VIN', ' class="sym-text pin"');
+        out += L(-60, 20, -40, 20) + clockMark(-40, 20);
+      } else {
+        out += L(40, -20, 60, -20) + T(26, -16, 'OUT', ' class="sym-text pin"');
+      }
+      [-40, -20, 0, 20].forEach((y, i) => {
+        out += adc ? L(40, y, 60, y) + T(31, y + 4, `D${i}`, ' class="sym-text pin"') : L(-60, y, -40, y) + T(-31, y + 4, `D${i}`, ' class="sym-text pin"');
+      });
+      return out;
+    }
+    case 'tline':
+      return (
+        L(-60, -20, -40, -20) +
+        L(-60, 20, -40, 20) +
+        L(40, -20, 60, -20) +
+        L(40, 20, 60, 20) +
+        `<rect class="bg" x="-40" y="-28" width="80" height="56" rx="10"/>` +
+        L(-40, -20, 40, -20, ' class="plate"') +
+        L(-40, 20, 40, 20, ' class="plate"') +
+        T(0, 5, 'Z0', ' class="sym-text small"')
+      );
     case 'psu':
       return (
         L(0, -40, 0, -24) +

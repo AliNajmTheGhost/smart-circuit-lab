@@ -834,7 +834,7 @@ export class Scope {
     const x0 = Math.min(0, ...xs);
     const x1 = Math.max(0, ...xs);
     // Diodes: clip the forward current so the knee stays visible.
-    const y1 = Math.max(1e-9, Math.min(Math.max(...ys), plot.curves.length === 1 ? 0.1 : Infinity));
+    const y1 = Math.max(1e-9, Math.min(Math.max(...ys), plot.curves.length === 1 ? 0.1 : Infinity)) * 1.12;
     const y0 = Math.min(0, Math.max(Math.min(...ys), -y1));
     const L = 58 * dpr;
     const R = W - 16 * dpr;

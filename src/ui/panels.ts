@@ -13,6 +13,9 @@ import { canTrace } from '../sim/curves';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document): T => root.querySelector(sel) as T;
 
+/** A 4-bit code as decimal and binary: 11 (1011). */
+const codeText = (n: number): string => `${n} (${Math.round(n).toString(2).padStart(4, '0')})`;
+
 /** The digit a 7-segment display is showing, read back from which segments are lit. */
 function shownDigit(x: Record<string, number>): string {
   const bits = 'abcdefg'.split('').reduce((acc, c, i) => acc | ((x[`seg_${c}`] ?? 0) > 0.3 ? 1 << i : 0), 0);
@@ -569,6 +572,21 @@ export class Panels {
         break;
       case 'sevenseg':
         rows.push([t('digit'), () => shownDigit(r()?.extra ?? {})]);
+        break;
+      case 'opamp':
+        rows.push(
+          [t('vdiff'), () => fmt(x('vd'), 'V')],
+          [t('outV'), () => {
+            const d = app.engine.byId.get(p.id);
+            return d ? fmt(app.engine.volt(d.nodes[2]), 'V') : '—';
+          }],
+        );
+        break;
+      case 'adc':
+        rows.push([t('code'), () => codeText(x('code'))]);
+        break;
+      case 'dac':
+        rows.push([t('code'), () => codeText(x('code'))], [t('outV'), () => fmt(x('vout'), 'V')]);
         break;
       case 'bode':
         rows.push([t('cutoff'), () => this.scope.cutoffText || '—']);

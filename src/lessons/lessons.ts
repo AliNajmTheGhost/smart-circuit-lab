@@ -328,4 +328,84 @@ export const LESSONS: Lesson[] = [
       },
     ],
   },
+  {
+    id: 'opamp',
+    grade: 2,
+    ref: 'الوحدة 1',
+    ar: 'مكبر العمليات العاكس',
+    en: 'Inverting op-amp amplifier',
+    goal: { ar: 'التحقق من أن الكسب = −Rf ÷ Rin ومعرفة الإشباع.', en: 'Check that gain = −Rf ÷ Rin and see saturation.' },
+    scopeWindow: 0.005,
+    build: () => example('opamp-inv').build(),
+    steps: [
+      {
+        ar: 'افتح «راسم الإشارة». الدخل (القناة 1) قيمته العظمى 0.5V والخرج (القناة 2) 5V ومقلوب. الكسب = −Rf ÷ Rin = −10k ÷ 1k = −10.',
+        en: 'Open the oscilloscope. Input peak 0.5 V, output 5 V and inverted. Gain = −Rf ÷ Rin = −10.',
+        check: (c) => c.scopeOpen,
+      },
+      {
+        ar: 'غيّر مقاومة التغذية العكسية R2 إلى 22k. كم يصبح الكسب؟ تحقق من Vp-p في القياسات تحت الشاشة.',
+        en: 'Change the feedback resistor R2 to 22k. What is the gain now? Check Vp-p under the screen.',
+        check: (c) => c.parts('resistor').some((r) => near(c.num(r, 'R'), 22000, 1)),
+      },
+      {
+        ar: 'اجعل سعة مولد الإشارة 1V. الخرج المتوقع 22V، لكن مكبر العمليات لا يتجاوز جهد الإشباع (حوالي 13V)، فتُقصّ قمة الموجة.',
+        en: 'Set the generator to 1 V. The expected 22 V is clipped at the saturation voltage (about 13 V).',
+        check: (c) => c.parts('funcgen').some((f) => near(c.num(f, 'Vp'), 1, 0.01)),
+      },
+    ],
+  },
+  {
+    id: 'tline',
+    grade: 2,
+    ref: 'الوحدة 5',
+    ar: 'خط النقل: الانعكاس',
+    en: 'Transmission line reflections',
+    goal: { ar: 'مشاهدة تأخير الإشارة وانعكاسها حسب الحمل.', en: 'See the delay and how the load causes reflections.' },
+    scopeWindow: 0.001,
+    build: () => example('tline').build(),
+    steps: [
+      {
+        ar: 'افتح «راسم الإشارة». الحمل 75Ω يساوي Z0، فالنبضة تصل إلى النهاية (القناة 2) بعد 100µs بدون انعكاس. استعمل «المؤشرات» لقياس زمن التأخير.',
+        en: 'Open the oscilloscope. The 75 Ω load matches Z0: the pulse arrives 100 µs later with no reflection. Use the cursors to measure the delay.',
+        check: (c) => c.scopeOpen,
+      },
+      {
+        ar: 'اجعل مقاومة الحمل R1 كبيرة جداً (1MΩ) لتمثل خطاً مفتوحاً. لاحظ أن الجهد في النهاية تضاعف، وأن الانعكاس رجع إلى البداية بعد 200µs.',
+        en: 'Make the load R1 1 MΩ (open line). The far-end voltage doubles and the reflection returns after 200 µs.',
+        check: (c) => c.parts('resistor').some((r) => c.num(r, 'R') >= 1e5),
+      },
+      {
+        ar: 'الآن اجعلها صغيرة جداً (1mΩ) لتمثل قصراً. الانعكاس يرجع مقلوباً فيلغي النبضة في البداية.',
+        en: 'Now make it tiny (1 mΩ, a short). The reflection comes back inverted.',
+        check: (c) => c.parts('resistor').some((r) => c.num(r, 'R') <= 1),
+      },
+    ],
+  },
+  {
+    id: 'adc',
+    grade: 3,
+    ref: '13–14',
+    ar: 'التحويل من تماثلي إلى رقمي وبالعكس',
+    en: 'A/D and D/A conversion',
+    goal: { ar: 'فهم أخذ العينات والتكميم في المحولات.', en: 'Understand sampling and quantisation.' },
+    scopeWindow: 0.2,
+    build: () => example('adc-dac').build(),
+    steps: [
+      {
+        ar: 'افتح «راسم الإشارة». القناة 1 هي الإشارة الأصلية، والقناة 2 هي الإشارة بعد تحويلها إلى رقم من 4 بتات ثم إعادتها: تظهر على شكل درجات.',
+        en: 'Open the oscilloscope. CH1 is the original; CH2 went to 4 bits and back, so it looks like steps.',
+        check: (c) => c.scopeOpen,
+      },
+      {
+        ar: 'اختر مولد نبضات العينة XFG2 واجعل تردده 1k. هل أصبحت الدرجات أقصر عرضاً؟ هذا هو تردد أخذ العينات.',
+        en: 'Select the sampling clock XFG2 and set it to 1k. Are the steps narrower? That is the sampling rate.',
+        check: (c) => c.parts('funcgen').some((f) => f.params.wave === 'pulse' && c.num(f, 'f') >= 999),
+      },
+      {
+        ar: 'ارتفاع كل درجة = Vref ÷ 16 = 0.31V، وهذا خطأ التكميم. كلما زاد عدد البتات صغرت الدرجة.',
+        en: 'Each step is Vref ÷ 16 = 0.31 V, the quantisation error. More bits make smaller steps.',
+      },
+    ],
+  },
 ];
