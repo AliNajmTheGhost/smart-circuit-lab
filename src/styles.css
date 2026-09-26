@@ -151,7 +151,7 @@ h3 {
   background: #0f1f1a;
   color: #cfe9df;
   border-top: 1px solid var(--rule);
-  height: 230px;
+  height: 360px;
   display: flex;
   flex-direction: column;
 }
@@ -793,6 +793,24 @@ select {
 .numin input.bad {
   background: var(--bad-soft);
 }
+.numin .unitsel {
+  border: 0;
+  border-left: 1px solid var(--rule);
+  border-radius: 0;
+  background: var(--surface);
+  padding: 7px 6px;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  max-width: 55%;
+  cursor: pointer;
+}
+.fhint {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-family: var(--mono);
+  direction: ltr;
+  text-align: right;
+}
 .numin .unit {
   padding: 0 10px;
   font-family: var(--mono);
@@ -929,6 +947,29 @@ select {
 
 /* ---------------------------------------------------------------- scope */
 
+.scope {
+  position: relative;
+}
+.scope-grip {
+  position: absolute;
+  top: -4px;
+  inset-inline: 0;
+  height: 9px;
+  cursor: ns-resize;
+  z-index: 3;
+  touch-action: none;
+}
+.scope-grip::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  width: 44px;
+  height: 3px;
+  margin-left: -22px;
+  border-radius: 2px;
+  background: #3d6a5a;
+}
 .scope-head {
   display: flex;
   align-items: center;
@@ -949,13 +990,122 @@ select {
   color: #cfe9df;
   border-color: #2a4a3d;
 }
-.scope .icon-btn {
+.scope .scope-x {
   margin-inline-start: auto;
   color: #cfe9df;
 }
 .scope .icon-btn:hover {
   background: #173126;
   border-color: #2a4a3d;
+}
+.knobs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border: 1px solid #22423a;
+  border-radius: 7px;
+  background: #0c1a15;
+}
+.klabel {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: #8fb8a8;
+  letter-spacing: 0.04em;
+  margin-inline-end: 2px;
+}
+.scope .mini {
+  background: #13291f;
+  color: #cfe9df;
+  border: 1px solid #2a4a3d;
+  border-radius: 5px;
+  padding: 1px 7px;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  cursor: pointer;
+  line-height: 1.6;
+}
+.scope .mini.wide {
+  padding: 1px 10px;
+  font-family: var(--font);
+}
+.scope .mini.on {
+  background: #2a4a3d;
+  color: #fff;
+  border-color: #5cc49a;
+}
+.scope select {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  padding: 1px 4px;
+}
+.runstop {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 0.8rem;
+  border-radius: 6px;
+  padding: 3px 12px;
+  cursor: pointer;
+  border: 0;
+  min-width: 64px;
+}
+.runstop.run {
+  background: #1e7657;
+  color: #fff;
+}
+.runstop.stop {
+  background: #b42318;
+  color: #fff;
+}
+.lever {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-top: 1px solid #1f3a31;
+  font-size: 0.78rem;
+  color: #9fc4b6;
+}
+.lever input {
+  flex: 1;
+  accent-color: #e48b5c;
+  min-width: 80px;
+}
+.lever-end {
+  white-space: nowrap;
+  font-size: 0.72rem;
+}
+.lever-val {
+  font-family: var(--mono);
+  min-width: 70px;
+  color: #e48b5c;
+  font-weight: 500;
+}
+.meas {
+  padding: 2px 12px 6px;
+  display: grid;
+  gap: 2px;
+  font-family: var(--mono);
+  font-size: 0.76rem;
+}
+.mrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  align-items: center;
+}
+.mrow i {
+  font-style: normal;
+  color: #8fb8a8;
+  margin-inline-end: 3px;
+}
+.mrow em {
+  color: #6f9486;
+  font-style: normal;
+  font-family: var(--font);
+}
+.ch.curs {
+  background: #e48b5c;
 }
 .legend {
   display: flex;
@@ -1322,7 +1472,10 @@ select {
     transform: none;
   }
   .scope {
-    height: 250px;
+    height: 420px;
+  }
+  .knobs {
+    padding: 1px 4px;
   }
   .scope-head {
     gap: 4px 10px;

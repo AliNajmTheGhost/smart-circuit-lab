@@ -66,3 +66,48 @@ export function fmt(v: number, unit = '', digits = 3, space = true): string {
 
 /** Compact form for labels on the board: "4.7kΩ". */
 export const fmtShort = (v: number, unit = ''): string => fmt(v, unit, 3, false);
+
+export interface Prefix {
+  sym: string;
+  factor: number;
+  ar: string;
+  en: string;
+}
+
+const P_ALL: Record<string, Prefix> = {
+  G: { sym: 'G', factor: 1e9, ar: 'كيكا', en: 'giga' },
+  M: { sym: 'M', factor: 1e6, ar: 'ميكا', en: 'mega' },
+  k: { sym: 'k', factor: 1e3, ar: 'كيلو', en: 'kilo' },
+  '': { sym: '', factor: 1, ar: '', en: '' },
+  m: { sym: 'm', factor: 1e-3, ar: 'ميلي', en: 'milli' },
+  µ: { sym: 'µ', factor: 1e-6, ar: 'مايكرو', en: 'micro' },
+  n: { sym: 'n', factor: 1e-9, ar: 'نانو', en: 'nano' },
+  p: { sym: 'p', factor: 1e-12, ar: 'بيكو', en: 'pico' },
+};
+
+/** Which prefixes make sense for each unit, largest first (what a student would pick from). */
+const BY_UNIT: Record<string, string[]> = {
+  Ω: ['M', 'k', '', 'm'],
+  F: ['', 'm', 'µ', 'n', 'p'],
+  H: ['', 'm', 'µ'],
+  V: ['k', '', 'm', 'µ'],
+  A: ['', 'm', 'µ', 'n'],
+  W: ['k', '', 'm'],
+  Hz: ['G', 'M', 'k', ''],
+  s: ['', 'm', 'µ', 'n'],
+};
+
+/** Prefixes offered in a unit's drop-down, or none for unitless values. */
+export function prefixesFor(unit: string): Prefix[] {
+  return (BY_UNIT[unit] ?? []).map((k) => P_ALL[k]);
+}
+
+/** Split a value into the number a student types and the prefix they pick: 4700 Ω -> 4.7 and k. */
+export function splitValue(v: number, unit: string): { num: number; prefix: Prefix } {
+  const list = prefixesFor(unit);
+  if (!list.length || v === 0 || !Number.isFinite(v)) return { num: v, prefix: P_ALL[''] };
+  const a = Math.abs(v);
+  // The largest prefix that keeps the number at 1 or more; otherwise the smallest available.
+  const pick = list.find((p) => a >= p.factor * 0.9999) ?? list[list.length - 1];
+  return { num: Number((v / pick.factor).toPrecision(6)), prefix: pick };
+}

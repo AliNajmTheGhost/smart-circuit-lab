@@ -3,12 +3,13 @@ import { getLang, nameOf, t } from '../i18n';
 import { lessonCtx, LESSONS, type Lesson } from '../lessons/lessons';
 import { CATEGORIES, defOf, PARTS, type ParamDef } from '../model/library';
 import { keyOf, type Part } from '../model/types';
-import type { Engine } from '../sim/engine';
-import { fmt, fmtShort, parseValue } from '../units';
+import { fmt, fmtShort, parseValue, prefixesFor, splitValue } from '../units';
 import { SPEEDS, type App } from './app';
 import type { Board } from './board';
 import { multimeterText } from './board';
+import { Scope } from './scope';
 import { symbolSvg } from './symbols';
+import { canTrace } from '../sim/curves';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document): T => root.querySelector(sel) as T;
 
@@ -405,6 +406,7 @@ export class Panels {
       <h3>${t('readings')}</h3>
       <dl class="readings" id="readings"></dl>
       <div class="actions">
+        ${canTrace(p.type) ? `<button data-do="curve">${icon('scope')}<span>${t('traceCurve')}</span></button>` : ''}
         <button data-do="rotate">${icon('rotate')}<span>${t('rotate')}</span></button>
         <button data-do="duplicate">${icon('copy')}<span>${t('duplicate')}</span></button>
         <button data-do="delete" class="danger">${icon('trash')}<span>${t('delete')}</span></button>
@@ -414,6 +416,7 @@ export class Panels {
     this.buildReadings(p);
     el.querySelector('.actions')!.addEventListener('click', (e) => {
       const b = (e.target as Element).closest<HTMLElement>('[data-do]');
+      if (b?.dataset.do === 'curve') this.scope.showIv(p);
       if (b?.dataset.do === 'rotate') this.board.rotateSelected();
       if (b?.dataset.do === 'duplicate') this.board.duplicateSelected();
       if (b?.dataset.do === 'delete') this.board.deleteSelected();
@@ -433,8 +436,18 @@ export class Panels {
       const pct = Math.round(Number(v) * 100);
       return `<div class="frow">${lbl}<div class="slider"><input type="range" id="${id}" data-key="${d.key}" min="${d.min}" max="${d.max}" step="${d.step}" value="${v}"><output>${pct}%</output></div></div>`;
     }
-    const shown = d.unit ? fmtShort(Number(v)) : String(v);
-    return `<div class="frow">${lbl}<div class="numin"><input type="text" inputmode="decimal" id="${id}" data-key="${d.key}" value="${esc(shown)}" dir="ltr"><span class="unit">${d.unit}</span></div><div class="ferr" hidden>${t('invalidValue')}</div></div>`;
+    // The student types only the number, then picks kilo, milli, micro... from the list.
+    const prefixes = prefixesFor(d.unit);
+    const { num, prefix } = splitValue(Number(v), d.unit);
+    const unitPart = prefixes.length
+      ? `<select class="unitsel" data-prefix-for="${d.key}" aria-label="${esc(nameOf(d))}">${prefixes
+          .map((q) => `<option value="${q.factor}"${q.sym === prefix.sym ? ' selected' : ''}>${q.sym}${d.unit}${q.ar ? ` · ${esc(nameOf(q))}` : ''}</option>`)
+          .join('')}</select>`
+      : d.unit
+        ? `<span class="unit">${d.unit}</span>`
+        : '';
+    const range = d.max !== undefined ? `<div class="fhint">${fmtShort(d.min ?? 0, d.unit)} – ${fmtShort(d.max, d.unit)}</div>` : '';
+    return `<div class="frow">${lbl}<div class="numin"><input type="text" inputmode="decimal" id="${id}" data-key="${d.key}" value="${esc(String(num))}" dir="ltr">${unitPart}</div>${range}<div class="ferr" hidden>${t('invalidValue')}</div></div>`;
   }
 
   private bindFields(el: HTMLElement, p: Part): void {
@@ -457,10 +470,14 @@ export class Panels {
         });
         input.addEventListener('change', () => app.setParam(p.id, d.key, Number(input.value)));
       } else {
+        const unitSel = input.parentElement!.querySelector<HTMLSelectElement>('.unitsel');
         const commit = () => {
-          const v = parseValue(input.value);
+          const typed = parseValue(input.value);
+          // Plain digits take their unit from the list; "4.7k" typed in full still works too.
+          const plain = /^\s*[+-]?[\d٠-٩۰-۹.,٫]+(e[+-]?\d+)?\s*$/i.test(input.value);
+          const v = typed === null ? null : plain && unitSel ? typed * Number(unitSel.value) : typed;
           const err = input.closest('.frow')!.querySelector<HTMLElement>('.ferr')!;
-          if (v === null || (d.min !== undefined && v < d.min)) {
+          if (v === null || (d.min !== undefined && v < d.min) || (d.max !== undefined && v > d.max)) {
             err.hidden = false;
             input.classList.add('bad');
             return;
@@ -470,6 +487,7 @@ export class Panels {
           if (v !== Number(p.params[d.key])) app.setParam(p.id, d.key, v);
         };
         input.addEventListener('change', commit);
+        unitSel?.addEventListener('change', commit);
         input.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') commit();
         });
@@ -655,381 +673,6 @@ export class Panels {
 }
 
 // ---------------------------------------------------------------- oscilloscope
-
-const WINDOWS = [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5];
-const SAMPLES = 800;
-const CH_COLORS = ['#f5c542', '#4fc3f7'];
-const SCREEN_BG = '#0b1a16';
-const GRID_LINE = 'rgba(120,200,170,0.16)';
-
-interface BodePoint {
-  f: number;
-  db: number;
-  phase: number;
-}
-
-/** Oscilloscope and, when the circuit has a Bode plotter, its frequency-response screen. */
-class Scope {
-  private el = $('#scope');
-  private canvas!: HTMLCanvasElement;
-  private win = 0.02;
-  private tBuf = new Float64Array(SAMPLES);
-  private vBuf = [new Float64Array(SAMPLES), new Float64Array(SAMPLES)];
-  private has = [false, false];
-  private count = 0;
-  private head = 0;
-  private lastT = -1;
-  private probes: (string | null)[] = [null, null];
-  private tab: 'scope' | 'bode' = 'scope';
-  private hasBode = false;
-  private bode: BodePoint[] = [];
-  private bodeAt = 0;
-  private bodeDirty = true;
-  private hoverX: number | null = null;
-  cutoffText = '';
-
-  constructor(private app: App) {
-    this.build();
-    app.stepHooks.push((e) => this.sample(e));
-    app.on('doc', () => {
-      this.findProbes();
-      this.bodeDirty = true;
-      const has = app.doc.parts.some((p) => p.type === 'bode');
-      if (has !== this.hasBode) {
-        this.hasBode = has;
-        if (has) this.tab = 'bode';
-        else this.tab = 'scope';
-        this.build();
-      }
-    });
-    this.findProbes();
-    this.hasBode = app.doc.parts.some((p) => p.type === 'bode');
-    this.sync();
-  }
-
-  build(): void {
-    const tabs = this.hasBode
-      ? `<div class="tabs"><button data-tab="scope" class="${this.tab === 'scope' ? 'on' : ''}">${t('scopeTab')}</button><button data-tab="bode" class="${this.tab === 'bode' ? 'on' : ''}">${t('bodeTab')}</button></div>`
-      : `<h2>${t('scope')}</h2>`;
-    const scopeHead = `<div class="legend"><span class="ch ch1">CH1</span><b id="ch1v" dir="ltr">—</b><span class="ch ch2">CH2</span><b id="ch2v" dir="ltr">—</b></div>
-        <label class="field"><span>${t('window')}</span><select id="scope-win">${WINDOWS.map((w) => `<option value="${w}">${fmt(w, 's')}</option>`).join('')}</select></label>`;
-    const bodeHead = `<div class="legend"><span class="ch ch1">${t('gain')}</span><span class="ch ch2">${t('phase')}</span><b id="bode-read" dir="ltr"></b></div><b class="cutoff" id="bode-fc"></b>`;
-    this.el.innerHTML = `
-      <div class="scope-head">
-        ${tabs}
-        ${this.tab === 'scope' ? scopeHead : bodeHead}
-        <button class="icon-btn" data-scope="close" title="${t('close')}">${icon('close')}</button>
-      </div>
-      <div class="screen"><canvas></canvas><p class="scope-empty" hidden></p></div>`;
-    this.canvas = this.el.querySelector('canvas')!;
-    const sel = document.querySelector<HTMLSelectElement>('#scope-win');
-    if (sel) {
-      sel.value = String(this.win);
-      sel.addEventListener('change', () => this.setWindow(Number(sel.value)));
-    }
-    this.el.querySelector('[data-scope="close"]')!.addEventListener('click', () => this.app.setOption('scopeOpen', false));
-    this.el.querySelectorAll<HTMLElement>('[data-tab]').forEach((b) =>
-      b.addEventListener('click', () => {
-        this.tab = b.dataset.tab as 'scope' | 'bode';
-        this.bodeDirty = true;
-        this.build();
-      }),
-    );
-    this.canvas.addEventListener('pointermove', (e) => {
-      const r = this.canvas.getBoundingClientRect();
-      this.hoverX = (e.clientX - r.left) * (window.devicePixelRatio || 1);
-    });
-    this.canvas.addEventListener('pointerleave', () => (this.hoverX = null));
-  }
-
-  sync(): void {
-    this.el.hidden = !this.app.scopeOpen;
-    document.body.classList.toggle('scope-open', this.app.scopeOpen);
-  }
-
-  setWindow(w: number): void {
-    this.win = WINDOWS.includes(w) ? w : WINDOWS.reduce((a, b) => (Math.abs(b - w) < Math.abs(a - w) ? b : a));
-    const sel = document.querySelector<HTMLSelectElement>('#scope-win');
-    if (sel) sel.value = String(this.win);
-    this.clear();
-  }
-
-  clear(): void {
-    this.count = 0;
-    this.head = 0;
-    this.lastT = -1;
-  }
-
-  private findProbes(): void {
-    this.probes = [null, null];
-    for (const p of this.app.doc.parts) if (p.type === 'probe') this.probes[p.params.ch === '2' ? 1 : 0] ??= p.id;
-  }
-
-  private sample(e: Engine): void {
-    if (!this.app.scopeOpen) return;
-    if (e.t < this.lastT) this.clear();
-    if (this.lastT >= 0 && e.t - this.lastT < this.win / SAMPLES) return;
-    this.lastT = e.t;
-    this.tBuf[this.head] = e.t;
-    for (let c = 0; c < 2; c++) {
-      const id = this.probes[c];
-      const d = id ? e.byId.get(id) : undefined;
-      this.has[c] = !!d;
-      this.vBuf[c][this.head] = d ? e.volt(d.nodes[0]) : 0;
-    }
-    this.head = (this.head + 1) % SAMPLES;
-    this.count = Math.min(this.count + 1, SAMPLES);
-  }
-
-  private screen(): { g: CanvasRenderingContext2D; W: number; H: number; dpr: number } {
-    const cv = this.canvas;
-    const r = cv.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    if (cv.width !== Math.round(r.width * dpr) || cv.height !== Math.round(r.height * dpr)) {
-      cv.width = Math.round(r.width * dpr);
-      cv.height = Math.round(r.height * dpr);
-    }
-    const g = cv.getContext('2d')!;
-    g.direction = 'ltr';
-    g.fillStyle = SCREEN_BG;
-    g.fillRect(0, 0, cv.width, cv.height);
-    return { g, W: cv.width, H: cv.height, dpr };
-  }
-
-  private empty(msg: string | null): void {
-    const p = this.el.querySelector<HTMLElement>('.scope-empty')!;
-    p.hidden = !msg;
-    if (msg) p.textContent = msg;
-  }
-
-  draw(): void {
-    if (this.hasBode) this.updateBode();
-    if (!this.app.scopeOpen) return;
-    if (this.tab === 'bode') this.drawBode();
-    else this.drawScope();
-  }
-
-  private drawScope(): void {
-    const { g, W, H, dpr } = this.screen();
-    g.strokeStyle = GRID_LINE;
-    g.lineWidth = 1;
-    for (let i = 1; i < 10; i++) {
-      const x = Math.round((W * i) / 10) + 0.5;
-      g.beginPath();
-      g.moveTo(x, 0);
-      g.lineTo(x, H);
-      g.stroke();
-    }
-    for (let i = 1; i < 8; i++) {
-      const y = Math.round((H * i) / 8) + 0.5;
-      g.beginPath();
-      g.moveTo(0, y);
-      g.lineTo(W, y);
-      g.stroke();
-    }
-    g.strokeStyle = 'rgba(120,200,170,0.4)';
-    g.beginPath();
-    g.moveTo(0, H / 2 + 0.5);
-    g.lineTo(W, H / 2 + 0.5);
-    g.stroke();
-
-    const empty = !this.probes[0] && !this.probes[1];
-    this.empty(empty ? t('noProbes') : null);
-    if (empty || this.count < 2) return;
-
-    const tEnd = this.tBuf[(this.head - 1 + SAMPLES) % SAMPLES];
-    const tStart = tEnd - this.win;
-    const stats = [
-      { min: Infinity, max: -Infinity, abs: 0 },
-      { min: Infinity, max: -Infinity, abs: 0 },
-    ];
-    for (let k = 0; k < this.count; k++) {
-      const i = (this.head - this.count + k + SAMPLES) % SAMPLES;
-      if (this.tBuf[i] < tStart) continue;
-      for (let c = 0; c < 2; c++) {
-        if (!this.has[c]) continue;
-        const v = this.vBuf[c][i];
-        stats[c].abs = Math.max(stats[c].abs, Math.abs(v));
-        stats[c].min = Math.min(stats[c].min, v);
-        stats[c].max = Math.max(stats[c].max, v);
-      }
-    }
-    // Each channel gets its own volts/div, like the knobs on a real oscilloscope.
-    const perDiv = stats.map((st) => niceDiv(st.abs / 3.6));
-    g.lineWidth = 2 * dpr;
-    for (let c = 0; c < 2; c++) {
-      if (!this.has[c]) continue;
-      const scale = H / 8 / perDiv[c];
-      g.strokeStyle = CH_COLORS[c];
-      g.beginPath();
-      let first = true;
-      for (let k = 0; k < this.count; k++) {
-        const i = (this.head - this.count + k + SAMPLES) % SAMPLES;
-        const t0 = this.tBuf[i];
-        if (t0 < tStart) continue;
-        const x = ((t0 - tStart) / this.win) * W;
-        const y = H / 2 - this.vBuf[c][i] * scale;
-        if (first) g.moveTo(x, y);
-        else g.lineTo(x, y);
-        first = false;
-      }
-      g.stroke();
-    }
-    g.font = `${12 * dpr}px "IBM Plex Mono", monospace`;
-    g.textAlign = 'left';
-    let tx = 8 * dpr;
-    for (let c = 0; c < 2; c++) {
-      if (!this.has[c]) continue;
-      const label = `CH${c + 1} ${fmt(perDiv[c], 'V')}/div`;
-      g.fillStyle = CH_COLORS[c];
-      g.fillText(label, tx, H - 8 * dpr);
-      tx += g.measureText(label).width + 16 * dpr;
-    }
-    g.fillStyle = 'rgba(200,240,225,0.8)';
-    g.fillText(`${fmt(this.win / 10, 's')}/div`, tx, H - 8 * dpr);
-    for (let c = 0; c < 2; c++) {
-      const out = document.getElementById(`ch${c + 1}v`);
-      if (!out) continue;
-      const st = stats[c];
-      out.textContent = this.has[c] && Number.isFinite(st.max) ? `${fmt(st.max, 'V')} / ${fmt(st.min, 'V')} · p-p ${fmt(st.max - st.min, 'V')}` : '—';
-    }
-  }
-
-  /** Re-run the frequency sweep when the circuit changed, and now and then while it runs. */
-  private updateBode(): void {
-    const now = performance.now();
-    if (!this.bodeDirty && now - this.bodeAt < 1000) return;
-    this.bodeDirty = false;
-    this.bodeAt = now;
-    const app = this.app;
-    const bp = app.doc.parts.find((p) => p.type === 'bode');
-    const src = app.doc.parts.find((p) => p.type === 'funcgen' || p.type === 'ac');
-    if (!bp || !src) {
-      this.bode = [];
-      this.cutoffText = '';
-      return;
-    }
-    const nodes = app.engine.net.pinNodes.get(bp.id)!;
-    const fmin = Math.max(1e-3, Number(bp.params.fmin) || 1);
-    const fmax = Math.max(fmin * 10, Number(bp.params.fmax) || 1e5);
-    const freqs = Array.from({ length: 160 }, (_, i) => fmin * Math.pow(fmax / fmin, i / 159));
-    this.bode = app.engine.acSweep(src.id, nodes[0], nodes[1], freqs);
-    const fc = cutoffs(this.bode);
-    this.cutoffText = fc.map((f) => fmt(f, 'Hz')).join(' ، ');
-  }
-
-  private drawBode(): void {
-    const { g, W, H, dpr } = this.screen();
-    const pts = this.bode;
-    const bp = this.app.doc.parts.find((p) => p.type === 'bode');
-    this.empty(pts.length < 2 ? t('bodeNoSource') : null);
-    const fcEl = document.getElementById('bode-fc');
-    if (fcEl) fcEl.textContent = this.cutoffText ? `${t('cutoff')}: ${this.cutoffText}` : '';
-    if (!bp || pts.length < 2) return;
-
-    const L = 46 * dpr;
-    const R = W - 46 * dpr;
-    const T = 10 * dpr;
-    const B = H - 22 * dpr;
-    const f0 = pts[0].f;
-    const f1 = pts[pts.length - 1].f;
-    const xf = (f: number) => L + ((Math.log10(f) - Math.log10(f0)) / (Math.log10(f1) - Math.log10(f0))) * (R - L);
-    const dbs = pts.map((p) => p.db);
-    const top = Math.ceil(Math.max(...dbs) / 10) * 10 + (Math.max(...dbs) % 10 === 0 ? 10 : 0);
-    let bottom = Math.max(Math.floor(Math.min(...dbs) / 10) * 10, top - 80);
-    if (top - bottom < 30) bottom = top - 30;
-    const yDb = (d: number) => T + ((top - Math.max(bottom, Math.min(top, d))) / (top - bottom)) * (B - T);
-    const yPh = (ph: number) => T + ((180 - ph) / 360) * (B - T);
-
-    g.font = `${11 * dpr}px "IBM Plex Mono", monospace`;
-    g.lineWidth = 1;
-    g.strokeStyle = GRID_LINE;
-    g.fillStyle = 'rgba(200,240,225,0.75)';
-    g.textAlign = 'center';
-    for (let e = Math.ceil(Math.log10(f0)); e <= Math.floor(Math.log10(f1)); e++) {
-      const x = Math.round(xf(10 ** e)) + 0.5;
-      g.beginPath();
-      g.moveTo(x, T);
-      g.lineTo(x, B);
-      g.stroke();
-      g.fillText(fmt(10 ** e, 'Hz'), x, H - 6 * dpr);
-    }
-    g.textAlign = 'right';
-    for (let d = bottom; d <= top; d += 10) {
-      const y = Math.round(yDb(d)) + 0.5;
-      g.beginPath();
-      g.moveTo(L, y);
-      g.lineTo(R, y);
-      g.stroke();
-      g.fillStyle = CH_COLORS[0];
-      g.fillText(`${d} dB`, L - 4 * dpr, y + 4 * dpr);
-    }
-    g.textAlign = 'left';
-    g.fillStyle = CH_COLORS[1];
-    for (const ph of [180, 90, 0, -90, -180]) g.fillText(`${ph}°`, R + 4 * dpr, yPh(ph) + 4 * dpr);
-
-    const curve = (color: string, y: (p: BodePoint) => number, dash: number[]) => {
-      g.strokeStyle = color;
-      g.lineWidth = 2 * dpr;
-      g.setLineDash(dash);
-      g.beginPath();
-      pts.forEach((p, i) => (i ? g.lineTo(xf(p.f), y(p)) : g.moveTo(xf(p.f), y(p))));
-      g.stroke();
-      g.setLineDash([]);
-    };
-    curve(CH_COLORS[1], (p) => yPh(p.phase), [6 * dpr, 4 * dpr]);
-    curve(CH_COLORS[0], (p) => yDb(p.db), []);
-
-    g.strokeStyle = '#e48b5c';
-    g.lineWidth = 1.5 * dpr;
-    g.setLineDash([4 * dpr, 3 * dpr]);
-    for (const f of cutoffs(pts)) {
-      const x = xf(f);
-      g.beginPath();
-      g.moveTo(x, T);
-      g.lineTo(x, B);
-      g.stroke();
-    }
-    g.setLineDash([]);
-
-    const read = document.getElementById('bode-read');
-    if (this.hoverX !== null && this.hoverX >= L && this.hoverX <= R) {
-      const f = 10 ** (Math.log10(f0) + ((this.hoverX - L) / (R - L)) * (Math.log10(f1) - Math.log10(f0)));
-      const p = pts.reduce((a, b) => (Math.abs(Math.log(b.f / f)) < Math.abs(Math.log(a.f / f)) ? b : a));
-      g.strokeStyle = 'rgba(255,255,255,0.5)';
-      g.lineWidth = 1;
-      g.beginPath();
-      g.moveTo(xf(p.f), T);
-      g.lineTo(xf(p.f), B);
-      g.stroke();
-      if (read) read.textContent = `${fmt(p.f, 'Hz')}  ${p.db.toFixed(1)} dB  ${p.phase.toFixed(0)}°`;
-    } else if (read) read.textContent = '';
-  }
-}
-
-/** Frequencies where the gain is 3 dB below its peak (one for low/high-pass, two for band filters). */
-function cutoffs(pts: BodePoint[]): number[] {
-  if (pts.length < 2) return [];
-  const peak = Math.max(...pts.map((p) => p.db));
-  const level = peak - 3;
-  const out: number[] = [];
-  for (let i = 1; i < pts.length; i++) {
-    const a = pts[i - 1];
-    const b = pts[i];
-    if ((a.db - level) * (b.db - level) < 0) {
-      const k = (level - a.db) / (b.db - a.db);
-      out.push(10 ** (Math.log10(a.f) + k * (Math.log10(b.f) - Math.log10(a.f))));
-    }
-  }
-  return out.slice(0, 2);
-}
-
-function niceDiv(v: number): number {
-  if (!(v > 0)) return 1;
-  const e = Math.pow(10, Math.floor(Math.log10(v)));
-  for (const m of [1, 2, 5, 10]) if (m * e >= v) return m * e;
-  return 10 * e;
-}
 
 // ---------------------------------------------------------------- lessons
 
