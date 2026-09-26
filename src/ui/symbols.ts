@@ -377,7 +377,7 @@ export function symbolSvg(type: string, params: Record<string, ParamValue>, std:
         qBar(15, 24)
       );
     case 'counter': {
-      let out = L(-60, -40, -40, -40) + L(-60, 40, -40, 40) + icBox(-40, -52, 80, 104, params.mod === '16' ? 'CTR16' : 'CTR10');
+      let out = L(-60, -40, -40, -40) + L(-60, 40, -40, 40) + icBox(-40, -52, 80, 104, String(params.mod) === '16' ? 'CTR16' : 'CTR10');
       out += clockMark(-40, -40) + T(-26, 44, 'R', ' class="sym-text pin"');
       ['QA', 'QB', 'QC', 'QD'].forEach((q, i) => {
         const y = -40 + 20 * i;

@@ -407,7 +407,7 @@ export class Scope {
 
   private findProbes(): void {
     this.probes = [null, null];
-    for (const p of this.app.doc.parts) if (p.type === 'probe') this.probes[p.params.ch === '2' ? 1 : 0] ??= p.id;
+    for (const p of this.app.doc.parts) if (p.type === 'probe') this.probes[String(p.params.ch) === '2' ? 1 : 0] ??= p.id;
   }
 
   // ------------------------------------------------------------ acquisition

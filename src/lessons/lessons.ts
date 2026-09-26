@@ -294,7 +294,7 @@ export const LESSONS: Lesson[] = [
       {
         ar: 'المخارج QA=1 و QB=2 و QC=4 و QD=8. الرقم 5 = 1 + 4، أي QA و QC. اختر العداد U1 وغيّر «يعد حتى» إلى الوضع الثنائي 15. ماذا يظهر على العارضة بعد 9؟',
         en: 'QA=1, QB=2, QC=4, QD=8, so 5 = QA + QC. Switch the counter to binary (15). What shows after 9?',
-        check: (c) => c.parts('counter').some((x) => x.params.mod === '16'),
+        check: (c) => c.parts('counter').some((x) => String(x.params.mod) === '16'),
       },
       {
         ar: 'المفكك 7448 لا يعرض الأرقام من 10 إلى 15، لذلك تنطفئ العارضة. لهذا نستخدم العداد العشري مع العارضة.',

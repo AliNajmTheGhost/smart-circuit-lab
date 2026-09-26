@@ -812,7 +812,7 @@ export const PARTS: PartDef[] = [
     labelAt: { x: 0, y: -62 },
     optional: [1],
     desc: { ar: 'يزيد العدد بواحد مع كل نبضة ساعة ويخرجه بالنظام الثنائي.', en: 'Adds one on each clock pulse; outputs the count in binary.' },
-    valueText: (p) => (p.mod === '16' ? '0–15' : '0–9'),
+    valueText: (p) => (String(p.mod) === '16' ? '0–15' : '0–9'),
   },
   {
     type: 'bcd7',
@@ -1051,6 +1051,14 @@ export const PARTS: PartDef[] = [
 ];
 
 export const PART_BY_TYPE = new Map(PARTS.map((d) => [d.type, d]));
+
+/**
+ * A value picked from a drop-down, stored with the same type as the parameter's default:
+ * the switch state stays a number (0/1) while the counter mode stays text ('10'/'16').
+ */
+export function coerceParam(d: ParamDef, raw: string): ParamValue {
+  return typeof d.def === 'number' ? Number(raw) : raw;
+}
 
 export function defOf(type: string): PartDef {
   const d = PART_BY_TYPE.get(type);

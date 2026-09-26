@@ -1094,7 +1094,7 @@ class Counter extends Digital {
     super(part, nodes, [0, 1], [2, 3, 4, 5]);
   }
   logic(prev: number[]): void {
-    const mod = this.part.params.mod === '16' ? 16 : 10;
+    const mod = String(this.part.params.mod) === '16' ? 16 : 10;
     if (this.inLv[1]) this.count = 0;
     else if (this.rising(prev, 0)) this.count = (this.count + 1) % mod;
     this.out = [0, 1, 2, 3].map((b) => (this.count >> b) & 1);

@@ -1,7 +1,7 @@
 import { EXAMPLES } from '../examples';
 import { getLang, nameOf, t } from '../i18n';
 import { lessonCtx, LESSONS, type Lesson } from '../lessons/lessons';
-import { CATEGORIES, defOf, PARTS, type ParamDef } from '../model/library';
+import { CATEGORIES, coerceParam, defOf, PARTS, type ParamDef } from '../model/library';
 import { keyOf, type Part } from '../model/types';
 import { fmt, fmtShort, parseValue, prefixesFor, splitValue } from '../units';
 import { SPEEDS, type App } from './app';
@@ -464,7 +464,7 @@ export class Panels {
     for (const input of form.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-key]')) {
       const d = def.params.find((q) => q.key === input.dataset.key)!;
       if (input instanceof HTMLSelectElement) {
-        input.addEventListener('change', () => app.setParam(p.id, d.key, d.options!.every((o) => /^\d+$/.test(o.v)) ? Number(input.value) : input.value));
+        input.addEventListener('change', () => app.setParam(p.id, d.key, coerceParam(d, input.value)));
       } else if (input.type === 'range') {
         const out = input.parentElement!.querySelector('output')!;
         input.addEventListener('input', () => {
