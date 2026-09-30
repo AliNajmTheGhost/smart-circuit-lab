@@ -3,32 +3,206 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#13222b" />
+    <meta name="theme-color" content="#0b1220" />
     <meta name="description" content="نبض: مختبر محاكاة الدوائر الكهربائية والإلكترونية لطلاب التعليم المهني" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon-192.png" />
     <title>نبض · مختبر الدوائر</title>
+    <style>
+      /* Splash styles live here so the opening screen shows before anything else loads. */
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #070b14;
+      }
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: grid;
+        place-items: center;
+        color: #e5ecf6;
+        font-family: 'Readex Pro', 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
+        background:
+          radial-gradient(60% 50% at 50% 42%, rgba(45, 212, 191, 0.16), transparent 70%),
+          linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px) 0 0 / 28px 28px,
+          linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px) 0 0 / 28px 28px,
+          #070b14;
+        transition:
+          opacity 0.5s ease,
+          transform 0.5s ease;
+        cursor: pointer;
+      }
+      #splash.done {
+        opacity: 0;
+        transform: scale(1.03);
+        pointer-events: none;
+      }
+      .sp-center {
+        display: grid;
+        justify-items: center;
+        gap: 14px;
+        padding: 24px;
+        text-align: center;
+      }
+      .sp-pulse {
+        width: min(360px, 78vw);
+        height: auto;
+        overflow: visible;
+      }
+      .sp-pulse path {
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .sp-base {
+        stroke: rgba(148, 163, 184, 0.18);
+        stroke-width: 3;
+      }
+      .sp-trace {
+        stroke: #2dd4bf;
+        stroke-width: 4;
+        stroke-dasharray: 90 520;
+        filter: drop-shadow(0 0 6px rgba(45, 212, 191, 0.9));
+        animation: sp-run 1.7s cubic-bezier(0.5, 0, 0.3, 1) infinite;
+      }
+      @keyframes sp-run {
+        from {
+          stroke-dashoffset: 90;
+        }
+        to {
+          stroke-dashoffset: -520;
+        }
+      }
+      .sp-name {
+        margin: 6px 0 0;
+        font-size: clamp(64px, 14vw, 112px);
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: -0.01em;
+        background: linear-gradient(180deg, #ffffff 20%, #99f6e4 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        animation: sp-rise 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+      }
+      .sp-latin {
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: 13px;
+        letter-spacing: 0.5em;
+        color: #5eead4;
+        margin-inline-start: 0.5em;
+        animation: sp-rise 0.9s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+      }
+      .sp-tag {
+        margin: 0;
+        font-family: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
+        font-size: 17px;
+        color: #a9b7cc;
+        animation: sp-rise 0.9s 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+      }
+      @keyframes sp-rise {
+        from {
+          opacity: 0;
+          transform: translateY(14px);
+        }
+      }
+      .sp-load {
+        display: grid;
+        gap: 8px;
+        width: min(280px, 70vw);
+        margin-top: 18px;
+        animation: sp-rise 0.9s 0.3s both;
+      }
+      .sp-bar {
+        height: 5px;
+        border-radius: 99px;
+        background: rgba(148, 163, 184, 0.16);
+        overflow: hidden;
+      }
+      .sp-bar i {
+        display: block;
+        height: 100%;
+        width: 4%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #2dd4bf, #a7f3d0);
+        box-shadow: 0 0 12px rgba(45, 212, 191, 0.7);
+        transition: width 0.35s ease;
+      }
+      .sp-row {
+        display: flex;
+        justify-content: space-between;
+        font-family: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
+        font-size: 13px;
+        color: #8a99b0;
+      }
+      .sp-pct {
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        direction: ltr;
+      }
+      .sp-foot {
+        position: absolute;
+        bottom: max(24px, env(safe-area-inset-bottom));
+        inset-inline: 0;
+        margin: 0;
+        text-align: center;
+        font-family: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
+        font-size: 13px;
+        color: #64748b;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .sp-trace,
+        .sp-name,
+        .sp-latin,
+        .sp-tag,
+        .sp-load {
+          animation: none;
+        }
+        .sp-trace {
+          stroke-dasharray: none;
+        }
+      }
+    </style>
   </head>
   <body>
+    <div id="splash" role="status" aria-live="polite">
+      <div class="sp-center">
+        <svg class="sp-pulse" viewBox="0 0 360 90" aria-hidden="true">
+          <path class="sp-base" d="M4 50H120l14-2 12-34 18 66 16-50 12 26 8-6H356" />
+          <path class="sp-trace" d="M4 50H120l14-2 12-34 18 66 16-50 12 26 8-6H356" pathLength="520" />
+        </svg>
+        <h1 class="sp-name">نبض</h1>
+        <div class="sp-latin">NABD</div>
+        <p class="sp-tag">مختبر الدوائر الكهربائية والإلكترونية</p>
+        <div class="sp-load">
+          <div class="sp-bar"><i></i></div>
+          <div class="sp-row"><span class="sp-status">جارٍ التحميل…</span><span class="sp-pct">0%</span></div>
+        </div>
+      </div>
+      <p class="sp-foot">قسم الاتصالات · التعليم المهني</p>
+    </div>
+
     <div id="app">
       <header class="top">
-        <div class="brand">
-          <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M2 17h7l3-9 5 16 3-9 2 2h8" /></svg>
-          <div><strong>نبض</strong><span>Nabd</span></div>
-        </div>
+        <button class="brand" title="الصفحة الرئيسية">
+          <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="14" /><path d="M6 26h9l4-12 7 22 5-14 3 4h8" /></svg>
+          <span class="brand-text"><strong>نبض</strong><small>مختبر الدوائر</small></span>
+        </button>
         <nav class="tools" id="tools" aria-label="الأدوات"></nav>
       </header>
-      <aside class="palette" id="palette"></aside>
-      <main class="stage" id="stage">
-        <div class="status" id="status"></div>
-        <div class="lesson" id="lesson" hidden></div>
-      </main>
-      <aside class="side" id="side">
-        <section id="inspector" class="card"></section>
-        <section id="doctor" class="card"></section>
-      </aside>
-      <section class="scope" id="scope" hidden></section>
+      <div class="workspace">
+        <aside class="palette panel" id="palette"></aside>
+        <main class="stage" id="stage">
+          <div class="lesson" id="lesson" hidden></div>
+        </main>
+        <aside class="side" id="side">
+          <section id="inspector" class="card"></section>
+          <section id="doctor" class="card"></section>
+        </aside>
+        <section class="scope" id="scope" hidden></section>
+      </div>
     </div>
     <div id="modal" hidden></div>
     <div id="toast" role="status" aria-live="polite"></div>

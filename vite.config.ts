@@ -7,5 +7,5 @@ export default defineConfig(({ mode }) => ({
   base: './',
   server: { port: 5173 },
   plugins: mode === 'single' ? [viteSingleFile()] : [],
-  build: mode === 'single' ? { outDir: 'dist-single', emptyOutDir: true } : {},
+  build: mode === 'single' ? { target: 'es2022', outDir: 'dist-single', emptyOutDir: true } : { target: 'es2022' },
 }));

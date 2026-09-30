@@ -135,7 +135,12 @@ export class Board {
     host.appendChild(this.hint);
 
     this.readTheme();
+    // Wire colours come from the theme: follow both the device setting and the in-app switch.
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.readTheme());
+    new MutationObserver(() => {
+      this.readTheme();
+      this.frame(true);
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
     this.svg.addEventListener('pointerdown', (e) => this.down(e));
     this.svg.addEventListener('pointermove', (e) => this.move(e));

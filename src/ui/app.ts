@@ -7,6 +7,7 @@ import { Engine, type PartIssue } from '../sim/engine';
 import type { SymbolStd } from './symbols';
 
 export type Selection = { kind: 'part' | 'wire'; id: string } | null;
+export type Theme = 'system' | 'light' | 'dark';
 type EventName = 'doc' | 'select' | 'frame' | 'mode' | 'settings' | 'notes';
 
 export interface Note extends DoctorNote {
@@ -36,6 +37,8 @@ export class App {
   showVolt = true;
   showCurrent = true;
   scopeOpen = false;
+  /** 'system' follows the device; light and dark are explicit choices. */
+  theme: Theme = 'system';
   engine!: Engine;
   /** Damaged parts stay damaged until the student replaces them. */
   broken = new Map<string, PartIssue>();
@@ -344,8 +347,9 @@ export class App {
     this.emit('select');
   }
 
-  setOption<K extends 'std' | 'speed' | 'showVolt' | 'showCurrent' | 'scopeOpen'>(k: K, v: App[K]): void {
+  setOption<K extends 'std' | 'speed' | 'showVolt' | 'showCurrent' | 'scopeOpen' | 'theme'>(k: K, v: App[K]): void {
     (this as App)[k] = v;
+    if (k === 'theme') applyTheme(this.theme);
     this.saveSettings();
     this.emit('settings');
     if (k === 'std') this.emit('doc');
@@ -355,7 +359,15 @@ export class App {
     try {
       localStorage.setItem(
         STORE_SETTINGS,
-        JSON.stringify({ std: this.std, speed: this.speed, showVolt: this.showVolt, showCurrent: this.showCurrent, lang: getLang(), scopeOpen: this.scopeOpen }),
+        JSON.stringify({
+          std: this.std,
+          speed: this.speed,
+          showVolt: this.showVolt,
+          showCurrent: this.showCurrent,
+          lang: getLang(),
+          scopeOpen: this.scopeOpen,
+          theme: this.theme,
+        }),
       );
     } catch {
       /* storage may be unavailable; settings just won't persist */
@@ -374,6 +386,8 @@ export class App {
     if (typeof s.showVolt === 'boolean') this.showVolt = s.showVolt;
     if (typeof s.showCurrent === 'boolean') this.showCurrent = s.showCurrent;
     if (typeof s.scopeOpen === 'boolean') this.scopeOpen = s.scopeOpen;
+    if (s.theme === 'light' || s.theme === 'dark' || s.theme === 'system') this.theme = s.theme;
+    applyTheme(this.theme);
     setLang(s.lang === 'en' ? 'en' : 'ar');
   }
 
@@ -418,6 +432,12 @@ export class App {
       return false;
     }
   }
+}
+
+function applyTheme(theme: Theme): void {
+  const root = document.documentElement;
+  if (theme === 'system') delete root.dataset.theme;
+  else root.dataset.theme = theme;
 }
 
 function isDoc(d: unknown): d is CircuitDoc {

@@ -5,8 +5,8 @@ import { canTrace, traceCurves, type IvPlot } from '../sim/curves';
 import type { Engine } from '../sim/engine';
 import { fmt } from '../units';
 import type { App } from './app';
+import { $, icon } from './dom';
 
-const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document): T => root.querySelector(sel) as T;
 
 /** 1-2-5 steps like the knobs of a real oscilloscope. */
 function steps(lo: number, hi: number): number[] {
@@ -228,7 +228,7 @@ export class Scope {
       <div class="scope-head">
         ${tabHtml}
         ${controls}
-        <button class="icon-btn scope-x" data-scope="close" title="${t('close')}"><svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12 M18 6L6 18"/></svg></button>
+        <button class="icon-btn scope-x" data-scope="close" title="${t('close')}">${icon('close')}</button>
       </div>
       <div class="screen"><canvas></canvas><p class="scope-empty" hidden></p></div>
       ${below}`;
