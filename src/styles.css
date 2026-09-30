@@ -2024,6 +2024,19 @@ select {
   accent-color: var(--accent);
 }
 
+.start-error {
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  height: 100%;
+  padding: 24px;
+  text-align: center;
+}
+.start-error pre {
+  color: var(--bad);
+  white-space: pre-wrap;
+}
+
 /* ------------------------------------------------------------------ narrower screens */
 
 @media (max-width: 1280px) {

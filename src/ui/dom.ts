@@ -72,7 +72,10 @@ export function modal(html: string, bind: (el: HTMLElement, close: () => void) =
     document.removeEventListener('keydown', onKey);
   };
   const onKey = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') close();
+    if (e.key !== 'Escape') return;
+    // Escape closes the dialog only; it must not also clear the selection on the board.
+    e.stopPropagation();
+    close();
   };
   document.addEventListener('keydown', onKey);
   wrap.onclick = (e) => {

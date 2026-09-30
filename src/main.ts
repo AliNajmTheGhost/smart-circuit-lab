@@ -22,7 +22,7 @@ let panels!: Panels;
 /** Wait for the web fonts, but never hold the student up for more than a second and a half. */
 const fontsReady = () => Promise.race([document.fonts?.ready ?? Promise.resolve(), new Promise((r) => setTimeout(r, 1500))]);
 
-await runSplash([
+const started = runSplash([
   ['splashFonts', fontsReady],
   [
     'splashEngine',
@@ -44,16 +44,21 @@ await runSplash([
   ],
 ]);
 
-board.fit();
-window.addEventListener('resize', () => board.render());
-
-const loop = (now: number) => {
-  app.tick(now);
+try {
+  await started;
+  board.fit();
+  window.addEventListener('resize', () => board.render());
+  const loop = (now: number) => {
+    app.tick(now);
+    requestAnimationFrame(loop);
+  };
   requestAnimationFrame(loop);
-};
-requestAnimationFrame(loop);
-
-if (!welcomeSkipped()) panels.welcome();
+  if (!welcomeSkipped()) panels.welcome();
+} catch (err) {
+  // Start-up failed: show a plain message instead of a blank or frozen screen.
+  console.error(err);
+  document.getElementById('stage')!.innerHTML = `<div class="start-error"><h2>تعذّر تشغيل نبض</h2><p>أعد تحميل الصفحة. إذا تكررت المشكلة فامسح بيانات الموقع من إعدادات المتصفح.</p><pre dir="ltr">${String(err).replace(/[<&]/g, '')}</pre></div>`;
+}
 
 // Installable, offline-capable app when served over http(s); the single-file build skips this.
 if (import.meta.env.PROD && import.meta.env.MODE !== 'single' && 'serviceWorker' in navigator && location.protocol.startsWith('http')) {

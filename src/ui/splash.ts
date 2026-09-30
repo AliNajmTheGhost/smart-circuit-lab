@@ -34,17 +34,20 @@ export async function runSplash(tasks: SplashTask[]): Promise<void> {
     if (status) status.textContent = label;
   };
 
-  for (let k = 0; k < tasks.length; k++) {
-    const [key, run] = tasks[k];
-    show(k, t(key));
-    await nextFrame();
-    await run();
+  try {
+    for (let k = 0; k < tasks.length; k++) {
+      const [key, run] = tasks[k];
+      show(k, t(key));
+      await nextFrame();
+      await run();
+    }
+    show(tasks.length, t('splashReady'));
+    // Let the bar reach the end and the pulse finish a sweep, unless the student tapped.
+    while (!skip && performance.now() - start < minTime) await new Promise((r) => setTimeout(r, 50));
+  } finally {
+    // Whatever happened, never leave the student stuck behind the opening screen.
+    el.classList.add('done');
+    await new Promise((r) => setTimeout(r, reduced() ? 0 : 520));
+    el.remove();
   }
-  show(tasks.length, t('splashReady'));
-
-  // Let the bar reach the end and the pulse finish a sweep, unless the student tapped.
-  while (!skip && performance.now() - start < minTime) await new Promise((r) => setTimeout(r, 50));
-  el.classList.add('done');
-  await new Promise((r) => setTimeout(r, reduced() ? 0 : 520));
-  el.remove();
 }

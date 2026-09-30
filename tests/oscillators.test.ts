@@ -60,3 +60,27 @@ describe('RC phase-shift oscillator', () => {
     expect(f).toBeLessThan(780);
   });
 });
+
+describe('rebuilding the simulator with a new time step', () => {
+  it('does not kick a charging capacitor when the step shrinks', () => {
+    const b = new Builder();
+    b.add('battery', 0, 0, 0, { V: 10, r: 0.001 });
+    b.add('ground', 0, 40);
+    b.add('resistor', 100, -40, 0, { R: 1000 });
+    const c = b.add('capacitor', 200, 0, 1, { C: 100e-6 });
+    b.path(P(0, -40), P(60, -40));
+    b.path(P(140, -40), P(200, -40));
+    b.path(P(200, 40), P(0, 40));
+    const doc = b.done();
+    const coarse = new Engine(doc, 1e-5);
+    for (let i = 0; i < 2000; i++) coarse.step();
+    const fine = new Engine(doc, 2e-7);
+    fine.importState(coarse.exportState(), coarse.t);
+    const before = coarse.reading(c)!.v;
+    fine.step();
+    const dv = fine.reading(c)!.v - before;
+    // Exact: dv = (10 / RC) · e^(−t/RC) · dt ≈ 1.64e-5 V at t = 20 ms.
+    const exact = (10 / 0.1) * Math.exp(-coarse.t / 0.1) * 2e-7;
+    expect(Math.abs(dv - exact)).toBeLessThan(0.2 * exact);
+  });
+});

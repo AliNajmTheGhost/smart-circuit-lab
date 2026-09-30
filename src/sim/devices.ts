@@ -478,9 +478,15 @@ class Capacitor extends Device {
   save(): unknown {
     return [this.vPrev, this.vPrev2, this.hist];
   }
+  /**
+   * After a rebuild the time step may be different, so the two-step history no longer lines up:
+   * keep the charge and restart with one backward-Euler step.
+   */
   load(s: unknown): void {
     if (typeof s === 'number') this.vPrev = s;
-    else if (Array.isArray(s)) [this.vPrev, this.vPrev2, this.hist] = s as [number, number, number];
+    else if (Array.isArray(s)) this.vPrev = Number(s[0]) || 0;
+    this.vPrev2 = this.vPrev;
+    this.hist = 0;
   }
 }
 
@@ -525,9 +531,12 @@ class Inductor extends Device {
   save(): unknown {
     return [this.iPrev, this.iPrev2, this.hist];
   }
+  /** Same as the capacitor: keep the current, restart the two-step history. */
   load(s: unknown): void {
     if (typeof s === 'number') this.iPrev = s;
-    else if (Array.isArray(s)) [this.iPrev, this.iPrev2, this.hist] = s as [number, number, number];
+    else if (Array.isArray(s)) this.iPrev = Number(s[0]) || 0;
+    this.iPrev2 = this.iPrev;
+    this.hist = 0;
   }
 }
 
@@ -612,8 +621,14 @@ class Transformer extends Device {
   save(): unknown {
     return [this.i1, this.i2, this.h1, this.h2, this.hist];
   }
+  /** Keep the winding currents; the two-step history restarts because the time step may differ. */
   load(s: unknown): void {
-    if (Array.isArray(s)) [this.i1, this.i2, this.h1 = 0, this.h2 = 0, this.hist = 0] = s as number[];
+    if (!Array.isArray(s)) return;
+    this.i1 = Number(s[0]) || 0;
+    this.i2 = Number(s[1]) || 0;
+    this.h1 = this.i1;
+    this.h2 = this.i2;
+    this.hist = 0;
   }
 }
 
