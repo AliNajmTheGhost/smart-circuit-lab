@@ -98,3 +98,95 @@ export function solve(A: Float64Array, b: Float64Array, n: number): boolean {
   }
   return true;
 }
+
+/**
+ * LU solver that remembers its last factorisation. In a linear circuit with a fixed time step
+ * the matrix is the same every step, so only the cheap substitution (n²) runs instead of a
+ * full elimination (n³).
+ */
+export class LuSolver {
+  private readonly lu: Float64Array;
+  private readonly key: Float64Array;
+  private readonly perm: Int32Array;
+  private readonly tmp: Float64Array;
+  private valid = false;
+  /** How many solves reused the stored factorisation (for tests and tuning). */
+  reused = 0;
+
+  constructor(readonly n: number) {
+    this.lu = new Float64Array(n * n);
+    this.key = new Float64Array(n * n);
+    this.perm = new Int32Array(n);
+    this.tmp = new Float64Array(n);
+  }
+
+  /** Solves A·x = b. On success b holds x; A is left untouched. */
+  solve(A: Float64Array, b: Float64Array): boolean {
+    if (this.valid && same(A, this.key)) this.reused++;
+    else if (!this.factor(A)) return false;
+    this.substitute(b);
+    return true;
+  }
+
+  private factor(A: Float64Array): boolean {
+    const { n, lu, perm } = this;
+    this.key.set(A);
+    lu.set(A);
+    for (let i = 0; i < n; i++) perm[i] = i;
+    for (let k = 0; k < n; k++) {
+      let piv = k;
+      let max = Math.abs(lu[k * n + k]);
+      for (let i = k + 1; i < n; i++) {
+        const v = Math.abs(lu[i * n + k]);
+        if (v > max) {
+          max = v;
+          piv = i;
+        }
+      }
+      if (max < 1e-20) {
+        this.valid = false;
+        return false;
+      }
+      if (piv !== k) {
+        for (let j = 0; j < n; j++) {
+          const t = lu[k * n + j];
+          lu[k * n + j] = lu[piv * n + j];
+          lu[piv * n + j] = t;
+        }
+        const t = perm[k];
+        perm[k] = perm[piv];
+        perm[piv] = t;
+      }
+      const akk = lu[k * n + k];
+      for (let i = k + 1; i < n; i++) {
+        const f = lu[i * n + k] / akk;
+        lu[i * n + k] = f;
+        if (f === 0) continue;
+        for (let j = k + 1; j < n; j++) lu[i * n + j] -= f * lu[k * n + j];
+      }
+    }
+    this.valid = true;
+    return true;
+  }
+
+  private substitute(b: Float64Array): void {
+    const { n, lu, perm, tmp } = this;
+    for (let i = 0; i < n; i++) tmp[i] = b[perm[i]];
+    for (let i = 1; i < n; i++) {
+      let s = tmp[i];
+      for (let j = 0; j < i; j++) s -= lu[i * n + j] * tmp[j];
+      tmp[i] = s;
+    }
+    for (let i = n - 1; i >= 0; i--) {
+      let s = tmp[i];
+      for (let j = i + 1; j < n; j++) s -= lu[i * n + j] * tmp[j];
+      tmp[i] = s / lu[i * n + i];
+    }
+    b.set(tmp);
+  }
+}
+
+function same(a: Float64Array, b: Float64Array): boolean {
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}

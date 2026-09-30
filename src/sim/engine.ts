@@ -3,13 +3,15 @@ import type { CircuitDoc } from '../model/types';
 import { AcStamper, solveComplex } from './ac';
 import { createDevice, type Ctx, type Device, type Issue } from './devices';
 import { buildNetlist, wireCurrents, type Netlist } from './netlist';
-import { solve, Stamper } from './stamper';
+import { LuSolver, Stamper } from './stamper';
 
 export interface PartIssue extends Issue {
   part: string;
 }
 
-const MAX_ITER = 60;
+const MAX_ITER = 80;
+/** After this many Newton iterations, take half steps so stubborn circuits still settle. */
+const DAMP_AFTER = 25;
 
 /**
  * Transient simulator. Each step solves the nodal equations with Newton's method,
@@ -28,6 +30,7 @@ export class Engine {
   /** Steps that did not fully converge since the last reset. */
   roughSteps = 0;
   private readonly s: Stamper;
+  readonly lu: LuSolver;
   private readonly guess: Float64Array;
   private readonly nonlinear: boolean;
 
@@ -48,6 +51,7 @@ export class Engine {
     this.x = new Float64Array(this.n);
     this.guess = new Float64Array(this.n);
     this.s = new Stamper(this.n);
+    this.lu = new LuSolver(this.n);
     for (const p of doc.parts) {
       const d = createDevice(p, [...this.net.pinNodes.get(p.id)!, ...inner.get(p.id)!]);
       d.broken = broken.has(p.id);
@@ -92,7 +96,7 @@ export class Engine {
       }
       // A tiny leak to ground keeps isolated pieces solvable.
       for (let i = 0; i < this.n; i++) this.s.G[i * this.n + i] += 1e-12;
-      if (!solve(this.s.G, this.s.b, this.n)) {
+      if (!this.lu.solve(this.s.G, this.s.b)) {
         this.failure = 'fail.singular';
         return [];
       }
@@ -105,7 +109,8 @@ export class Engine {
         }
         if (Math.abs(next[i] - this.guess[i]) > 1e-6 + 1e-4 * Math.abs(next[i])) ok = false;
       }
-      this.guess.set(next);
+      if (iter >= DAMP_AFTER) for (let i = 0; i < this.n; i++) this.guess[i] += 0.5 * (next[i] - this.guess[i]);
+      else this.guess.set(next);
       if (!this.nonlinear || (ok && iter > 0)) {
         converged = true;
         break;

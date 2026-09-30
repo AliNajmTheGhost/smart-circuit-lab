@@ -486,6 +486,35 @@ export const EXAMPLES: Example[] = [
       return b.done();
     },
   },
+  {
+    id: 'phase-shift',
+    grade: 2,
+    ar: 'مذبذب إزاحة الطور RC',
+    en: 'RC phase-shift oscillator',
+    ref: '7',
+    scopeWindow: 0.01,
+    build() {
+      const b = new Builder('مذبذب إزاحة الطور');
+      b.add('opamp', 500, 0);
+      b.add('ground', 460, 20);
+      b.add('resistor', 500, -80, 0, { R: 330000 });
+      b.add('resistor', 400, -20, 0, { R: 10000 });
+      b.add('capacitor', 460, 120, 0, { C: 10e-9 });
+      b.add('resistor', 420, 160, 1, { R: 10000 });
+      b.add('ground', 420, 200);
+      b.add('capacitor', 380, 120, 0, { C: 10e-9 });
+      b.add('resistor', 340, 160, 1, { R: 10000 });
+      b.add('ground', 340, 200);
+      b.add('capacitor', 300, 120, 0, { C: 10e-9 });
+      b.add('probe', 540, 0, 0, { ch: '1' });
+      b.add('probe', 260, 120, 0, { ch: '2' });
+      b.path(P(460, -20), P(460, -80));
+      b.path(P(540, -80), P(540, 0), P(540, 120), P(500, 120));
+      b.path(P(440, -20), P(460, -20));
+      b.path(P(260, 120), P(260, -20), P(360, -20));
+      return b.done();
+    },
+  },
   opampExample('opamp-inv', 'مكبر العمليات العاكس (الكسب −10)', 'Inverting op-amp amplifier (gain −10)', 'الوحدة 1', 'resistor', { R: 1000 }, { R: 10000 }, { wave: 'sine', Vp: 0.5, f: 1000 }),
   opampExample('integrator', 'دائرة المكامل بمكبر العمليات', 'Op-amp integrator', '12', 'resistor', { R: 10000 }, { C: 100e-9 }, { wave: 'square', Vp: 1, f: 1000 }),
   opampExample('differentiator', 'دائرة المفاضل بمكبر العمليات', 'Op-amp differentiator', '11', 'capacitor', { C: 100e-9 }, { R: 10000 }, { wave: 'triangle', Vp: 1, f: 1000 }),

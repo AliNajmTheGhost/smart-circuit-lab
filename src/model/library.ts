@@ -858,6 +858,7 @@ export const PARTS: PartDef[] = [
       { key: 'Vsat', ar: 'جهد الإشباع (±)', en: 'Saturation voltage (±)', unit: 'V', def: 13, min: 0.5 },
       { key: 'A', ar: 'كسب الحلقة المفتوحة', en: 'Open-loop gain', unit: '', def: 100000, min: 10 },
       { key: 'GBW', ar: 'حاصل الكسب × عرض الحزمة', en: 'Gain-bandwidth product', unit: 'Hz', def: 1e6, min: 1 },
+      { key: 'Vos', ar: 'جهد الإزاحة للمدخل', en: 'Input offset voltage', unit: 'V', def: 0.001 },
     ],
     box: { x: -40, y: -32, w: 80, h: 64 },
     labelAt: { x: 0, y: -40 },

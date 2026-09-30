@@ -110,13 +110,14 @@ describe('simulator', () => {
     return { doc: b.done(), q, rc };
   }
 
-  it('amplifies base current in the active region (Ic = β·Ib)', () => {
+  it('amplifies base current in the active region (Ic = β·Ib, plus the Early effect)', () => {
     const { doc, q } = transistorCircuit(470e3);
     const e = new Engine(doc);
     run(e, 5e-4);
     const x = e.byId.get(q)!.extra();
-    expect(x.ic / x.ib).toBeGreaterThan(95);
-    expect(x.ic / x.ib).toBeLessThan(102);
+    // β = 100 and Early voltage 100 V: Ic / Ib = β · (1 + Vcb / VA).
+    const expected = 100 * (1 + (x.vce - x.vbe) / 100);
+    expect(x.ic / x.ib).toBeCloseTo(expected, 0);
     expect(x.vce).toBeGreaterThan(6.9);
     expect(x.vce).toBeLessThan(7.5);
   });

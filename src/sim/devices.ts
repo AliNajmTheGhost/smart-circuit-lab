@@ -422,8 +422,15 @@ class PowerSupply extends Device {
 
 // ---------------------------------------------------------------- energy storage
 
+/**
+ * Capacitor integrated with BDF2 (second-order backward difference) after the first step.
+ * Unlike backward Euler it does not drain energy from LC circuits, so oscillators keep ringing,
+ * and unlike the trapezoidal rule it does not ring numerically when a switch closes.
+ */
 class Capacitor extends Device {
   vPrev = 0;
+  vPrev2 = 0;
+  hist = 0;
   constructor(
     part: Part,
     nodes: number[],
@@ -434,11 +441,17 @@ class Capacitor extends Device {
   cap(): number {
     return Math.max(this.num('C', 1e-6), 1e-15);
   }
+  /** i = g·v + ieq for this step. */
+  coef(dt: number): { g: number; ieq: number } {
+    const k = this.cap() / dt;
+    if (this.hist >= 1) return { g: 1.5 * k, ieq: k * (-2 * this.vPrev + 0.5 * this.vPrev2) };
+    return { g: k, ieq: -k * this.vPrev };
+  }
   stamp(s: Stamper, c: Ctx): void {
     if (this.broken) return;
-    const g = this.cap() / c.dt;
+    const { g, ieq } = this.coef(c.dt);
     s.g(this.nodes[0], this.nodes[1], g);
-    s.flow(this.nodes[0], this.nodes[1], -g * this.vPrev);
+    s.flow(this.nodes[0], this.nodes[1], ieq);
   }
   accept(c: Ctx): void {
     if (this.broken) {
@@ -446,8 +459,11 @@ class Capacitor extends Device {
       return;
     }
     const v = this.v(c.x, 0) - this.v(c.x, 1);
-    const i = (this.cap() / c.dt) * (v - this.vPrev);
+    const { g, ieq } = this.coef(c.dt);
+    const i = g * v + ieq;
+    this.vPrev2 = this.vPrev;
     this.vPrev = v;
+    this.hist++;
     this.cur = [i, -i];
   }
   ac(s: AcStamper, w: number): void {
@@ -460,33 +476,46 @@ class Capacitor extends Device {
     return null;
   }
   save(): unknown {
-    return this.vPrev;
+    return [this.vPrev, this.vPrev2, this.hist];
   }
   load(s: unknown): void {
     if (typeof s === 'number') this.vPrev = s;
+    else if (Array.isArray(s)) [this.vPrev, this.vPrev2, this.hist] = s as [number, number, number];
   }
 }
 
+/** Coil with its wire resistance, integrated with BDF2 like the capacitor. */
 class Inductor extends Device {
   iPrev = 0;
+  iPrev2 = 0;
+  hist = 0;
   lr(): { L: number; R: number } {
     return { L: Math.max(this.num('L', 0.01), 1e-12), R: Math.max(this.num('Rs', 1), 1e-6) };
   }
+  /** i = g·v + k for this step. */
   coef(dt: number): { g: number; k: number } {
     const { L, R } = this.lr();
-    const g = 1 / (R + L / dt);
-    return { g, k: g * (L / dt) };
+    const l = L / dt;
+    if (this.hist >= 1) {
+      const g = 1 / (R + 1.5 * l);
+      return { g, k: g * l * (2 * this.iPrev - 0.5 * this.iPrev2) };
+    }
+    const g = 1 / (R + l);
+    return { g, k: g * l * this.iPrev };
   }
   stamp(s: Stamper, c: Ctx): void {
     const { g, k } = this.coef(c.dt);
     s.g(this.nodes[0], this.nodes[1], g);
-    s.flow(this.nodes[0], this.nodes[1], k * this.iPrev);
+    s.flow(this.nodes[0], this.nodes[1], k);
   }
   accept(c: Ctx): void {
     const { g, k } = this.coef(c.dt);
     const v = this.v(c.x, 0) - this.v(c.x, 1);
-    this.iPrev = g * v + k * this.iPrev;
-    this.cur = [this.iPrev, -this.iPrev];
+    const i = g * v + k;
+    this.iPrev2 = this.iPrev;
+    this.iPrev = i;
+    this.hist++;
+    this.cur = [i, -i];
   }
   ac(s: AcStamper, w: number): void {
     const { L, R } = this.lr();
@@ -494,10 +523,11 @@ class Inductor extends Device {
     s.y(this.nodes[0], this.nodes[1], R / den, (-w * L) / den);
   }
   save(): unknown {
-    return this.iPrev;
+    return [this.iPrev, this.iPrev2, this.hist];
   }
   load(s: unknown): void {
     if (typeof s === 'number') this.iPrev = s;
+    else if (Array.isArray(s)) [this.iPrev, this.iPrev2, this.hist] = s as [number, number, number];
   }
 }
 
@@ -505,6 +535,14 @@ class Inductor extends Device {
 class Transformer extends Device {
   i1 = 0;
   i2 = 0;
+  private h1 = 0;
+  private h2 = 0;
+  hist = 0;
+  /** Scale of the coil admittance and the history currents for this step (BDF2 after the first). */
+  private step(dt: number): { c: number; j1: number; j2: number } {
+    if (this.hist >= 1) return { c: dt / 1.5, j1: (2 * this.i1 - 0.5 * this.h1) / 1.5, j2: (2 * this.i2 - 0.5 * this.h2) / 1.5 };
+    return { c: dt, j1: this.i1, j2: this.i2 };
+  }
   inv(): { a: number; b: number; d: number } {
     const n = Math.max(this.num('n', 10), 0.01);
     const L1 = Math.max(this.num('L1', 10), 1e-9);
@@ -516,12 +554,12 @@ class Transformer extends Device {
   }
   stamp(s: Stamper, c: Ctx): void {
     const { a, b, d } = this.inv();
-    const dt = c.dt;
+    const { c: dt, j1, j2 } = this.step(c.dt);
     const [p1, p2, s1, s2] = this.nodes;
     const v1 = this.v(c.x, 0) - this.v(c.x, 1);
     const v2 = this.v(c.x, 2) - this.v(c.x, 3);
-    const I1 = dt * (a * v1 + b * v2) + this.i1;
-    const I2 = dt * (b * v1 + d * v2) + this.i2;
+    const I1 = dt * (a * v1 + b * v2) + j1;
+    const I2 = dt * (b * v1 + d * v2) + j2;
     s.lin(
       [p1, p2, s1, s2],
       [I1, -I1, I2, -I2],
@@ -539,10 +577,16 @@ class Transformer extends Device {
   }
   accept(c: Ctx): void {
     const { a, b, d } = this.inv();
+    const { c: dt, j1, j2 } = this.step(c.dt);
     const v1 = this.v(c.x, 0) - this.v(c.x, 1);
     const v2 = this.v(c.x, 2) - this.v(c.x, 3);
-    this.i1 += c.dt * (a * v1 + b * v2);
-    this.i2 += c.dt * (b * v1 + d * v2);
+    const n1 = dt * (a * v1 + b * v2) + j1;
+    const n2 = dt * (b * v1 + d * v2) + j2;
+    this.h1 = this.i1;
+    this.h2 = this.i2;
+    this.i1 = n1;
+    this.i2 = n2;
+    this.hist++;
     this.cur = [this.i1, -this.i1, this.i2, -this.i2];
   }
   ac(s: AcStamper, w: number): void {
@@ -566,10 +610,10 @@ class Transformer extends Device {
     return { i1: this.i1, i2: this.i2 };
   }
   save(): unknown {
-    return [this.i1, this.i2];
+    return [this.i1, this.i2, this.h1, this.h2, this.hist];
   }
   load(s: unknown): void {
-    if (Array.isArray(s)) [this.i1, this.i2] = s as [number, number];
+    if (Array.isArray(s)) [this.i1, this.i2, this.h1 = 0, this.h2 = 0, this.hist = 0] = s as number[];
   }
 }
 
@@ -782,10 +826,15 @@ class Bjt extends Device {
     const Ir = Is * (er - 1);
     const gf = (Is * ef) / VT + GMIN;
     const gr = (Is * er) / VT + GMIN;
+    // Early effect: the collector current rises slowly with Vce (base-width modulation).
+    const va = Math.max(this.num('VA', 100), 1);
+    const q = Math.max(0.1, 1 - vbc / va);
+    const dq = q > 0.1 ? -1 / va : 0;
+    const It = If - Ir;
     return {
-      Ic: If - Ir - Ir / betaR,
+      Ic: It * q - Ir / betaR,
       Ib: If / bf + Ir / betaR,
-      dIc: [gf, -gr * (1 + 1 / betaR)],
+      dIc: [gf * q, -gr * q + It * dq - gr / betaR],
       dIb: [gf / bf, gr / betaR],
     };
   }
@@ -1462,7 +1511,8 @@ class OpAmp extends Device {
   core(vd: number, dt: number): { vi: number; out: number; dout: number } {
     const { A, vs, tau } = this.cfg();
     const k = dt / tau;
-    const vi = (this.vint + k * A * vd) / (1 + k);
+    // A real 741 has about 1 mV input offset; it is also what starts an oscillator.
+    const vi = (this.vint + k * A * (vd + this.num('Vos', 0.001))) / (1 + k);
     const th = Math.tanh(vi / vs);
     return { vi, out: vs * th, dout: (1 - th * th) * ((k * A) / (1 + k)) };
   }
