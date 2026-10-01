@@ -515,6 +515,123 @@ export const EXAMPLES: Example[] = [
       return b.done();
     },
   },
+  {
+    id: 'lcd-counter',
+    grade: 2,
+    ar: 'عداد مع عارضة LCD',
+    en: 'Counter with an LCD display',
+    ref: '33',
+    build() {
+      const b = new Builder('عارضة LCD');
+      b.add('funcgen', 0, 0, 0, { wave: 'pulse', Vp: 5, f: 10, duty: 0.5, r: 1 });
+      b.add('ground', 0, 40);
+      b.add('counter', 160, -40);
+      b.add('bcd7', 340, -40);
+      b.add('lcd7', 480, -40);
+      b.add('ground', 480, 60);
+      b.path(P(0, -40), P(0, -80), P(100, -80));
+      for (const y of [-80, -60, -40, -20]) b.path(P(220, y), P(280, y));
+      for (let y = -100; y <= 20; y += 20) b.path(P(400, y), P(440, y));
+      return b.done();
+    },
+  },
+  {
+    id: 'ir-remote',
+    grade: 3,
+    ar: 'التحكم عن بعد بالأشعة تحت الحمراء',
+    en: 'Infrared remote control',
+    ref: '21',
+    build() {
+      const b = new Builder('التحكم بالأشعة تحت الحمراء');
+      b.add('battery', 0, 0, 0, { V: 9 });
+      b.add('ground', 0, 120);
+      b.add('button', 120, -160, 1);
+      b.add('resistor', 120, -80, 1, { R: 330 });
+      b.add('irtx', 120, 0, 1, { ch: '1' });
+      b.add('irrx', 300, -160, 3, { ch: '1' });
+      b.add('resistor', 300, 40, 1, { R: 10000 });
+      b.add('resistor', 340, 0, 0, { R: 4700 });
+      b.add('npn', 420, 0);
+      b.add('led', 440, -80, 1, { color: 'green' });
+      b.add('resistor', 440, -160, 1, { R: 470 });
+      b.path(P(0, -40), P(0, -200), P(440, -200));
+      b.path(P(300, -120), P(300, 0));
+      b.path(P(0, 40), P(0, 120), P(440, 120), P(440, 40));
+      b.path(P(120, 40), P(120, 120));
+      b.path(P(300, 80), P(300, 120));
+      return b.done();
+    },
+  },
+  {
+    id: 'tdm',
+    grade: 3,
+    ar: 'الإكثار بالتقسيم الزمني TDM',
+    en: 'Time-division multiplexing',
+    ref: '11',
+    scopeWindow: 0.05,
+    build() {
+      const b = new Builder('الإكثار الزمني');
+      b.add('funcgen', 0, -60, 0, { wave: 'sine', Vp: 2, f: 50, r: 50 });
+      b.add('ground', 0, -20);
+      b.add('funcgen', 60, 100, 0, { wave: 'triangle', Vp: 2, f: 30, r: 50 });
+      b.add('ground', 60, 140);
+      b.add('funcgen', 340, 120, 0, { wave: 'pulse', Vp: 5, f: 1000, duty: 0.5, r: 1 });
+      b.add('ground', 340, 160);
+      b.add('aswitch', 200, 0);
+      b.add('aswitch', 500, 0);
+      b.add('capacitor', 400, -60, 1, { C: 1e-6 });
+      b.add('ground', 400, -100);
+      b.add('capacitor', 400, 60, 1, { C: 1e-6 });
+      b.add('ground', 400, 100);
+      b.add('probe', 260, -140, 0, { ch: '1' });
+      b.add('probe', 400, -20, 0, { ch: '2' });
+      b.path(P(0, -100), P(120, -100), P(120, -20), P(160, -20));
+      b.path(P(60, 60), P(60, 20), P(160, 20));
+      b.path(P(240, 0), P(260, 0), P(260, -140), P(580, -140), P(580, 0), P(540, 0));
+      b.path(P(460, -20), P(400, -20));
+      b.path(P(460, 20), P(400, 20));
+      b.path(P(200, 40), P(200, 80), P(500, 80), P(500, 40));
+      return b.done();
+    },
+  },
+  {
+    id: 'fdm',
+    grade: 3,
+    ar: 'الإكثار بالتقسيم الترددي FDM',
+    en: 'Frequency-division multiplexing',
+    ref: '10',
+    scopeWindow: 0.02,
+    build() {
+      const b = new Builder('الإكثار الترددي');
+      b.add('funcgen', 0, -60, 0, { wave: 'am', Vp: 2, f: 5000, fm: 100, m: 0.6, r: 50 });
+      b.add('ground', 0, -20);
+      b.add('funcgen', 0, 100, 0, { wave: 'am', Vp: 2, f: 20000, fm: 150, m: 0.6, r: 50 });
+      b.add('ground', 0, 140);
+      b.add('resistor', 100, -100, 0, { R: 1000 });
+      b.add('resistor', 100, 60, 0, { R: 1000 });
+      b.add('resistor', 180, 120, 1, { R: 1000 });
+      b.add('ground', 180, 160);
+      b.add('inductor', 260, -100, 0, { L: 0.1, Rs: 1 });
+      b.add('capacitor', 340, -100, 0, { C: 10e-9 });
+      b.add('resistor', 420, -60, 1, { R: 100 });
+      b.add('ground', 420, -20);
+      b.add('inductor', 260, 20, 0, { L: 0.1, Rs: 1 });
+      b.add('capacitor', 340, 20, 0, { C: 680e-12 });
+      b.add('resistor', 420, 60, 1, { R: 100 });
+      b.add('ground', 420, 100);
+      b.add('probe', 180, -100, 0, { ch: '1' });
+      b.add('probe', 420, -100, 0, { ch: '2' });
+      b.path(P(0, -100), P(60, -100));
+      b.path(P(0, 60), P(60, 60));
+      b.path(P(140, -100), P(180, -100), P(180, 80));
+      b.path(P(140, 60), P(180, 60));
+      b.path(P(180, -100), P(220, -100));
+      b.path(P(380, -100), P(420, -100));
+      b.path(P(180, 20), P(220, 20));
+      b.path(P(380, 20), P(420, 20));
+      return b.done();
+    },
+  },
   opampExample('opamp-inv', 'مكبر العمليات العاكس (الكسب −10)', 'Inverting op-amp amplifier (gain −10)', 'الوحدة 1', 'resistor', { R: 1000 }, { R: 10000 }, { wave: 'sine', Vp: 0.5, f: 1000 }),
   opampExample('integrator', 'دائرة المكامل بمكبر العمليات', 'Op-amp integrator', '12', 'resistor', { R: 10000 }, { C: 100e-9 }, { wave: 'square', Vp: 1, f: 1000 }),
   opampExample('differentiator', 'دائرة المفاضل بمكبر العمليات', 'Op-amp differentiator', '11', 'capacitor', { C: 100e-9 }, { R: 10000 }, { wave: 'triangle', Vp: 1, f: 1000 }),

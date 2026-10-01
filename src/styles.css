@@ -688,6 +688,13 @@ select {
   stroke: none;
   opacity: 0.1;
 }
+.sym .lcdbody {
+  fill: #c9d6b6;
+  stroke: var(--part);
+}
+.sym .lcdseg {
+  fill: #18210f;
+}
 .sym .dmm {
   fill: #f0b429;
   stroke: #6b4c05;

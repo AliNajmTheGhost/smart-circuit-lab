@@ -104,6 +104,38 @@ export function lWires(a: Pt, b: Pt, horizontalFirst?: boolean): Wire[] {
   ];
 }
 
+/** Distance² from a to p when p lies on segment a→b (past a, up to b), otherwise null. */
+function alongSegment(p: Pt, a: Pt, b: Pt): number | null {
+  const cross = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+  if (cross !== 0) return null;
+  const dot = (p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y);
+  return dot > 0 && dot <= dist2(a, b) ? dist2(a, p) : null;
+}
+
+/**
+ * The wire path a student draws from a to b, cut short at the first pin or wire end it reaches.
+ * Releasing just past a battery terminal then ends the wire on the terminal
+ * instead of leaving a loose stub sticking out beyond it.
+ */
+export function routeWire(doc: CircuitDoc, a: Pt, b: Pt, horizontalFirst?: boolean): Wire[] {
+  const stops = connectionPoints(doc).filter((p) => p.x !== a.x || p.y !== a.y);
+  const out: Wire[] = [];
+  for (const seg of lWires(a, b, horizontalFirst)) {
+    let best: Pt | null = null;
+    let bestD = Infinity;
+    for (const p of stops) {
+      const d = alongSegment(p, seg.a, seg.b);
+      if (d !== null && d < bestD) {
+        bestD = d;
+        best = p;
+      }
+    }
+    out.push(best ? { ...seg, b: { ...best } } : seg);
+    if (best) break;
+  }
+  return out;
+}
+
 /**
  * A string that changes only when the circuit's wiring changes (not its values),
  * so the simulator can keep running while a student turns a knob or flips a switch.

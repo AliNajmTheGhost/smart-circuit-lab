@@ -309,7 +309,15 @@ export class Inspector {
       case 'bcd7':
         return [[t('bcdValue'), () => String(x('value'))]];
       case 'sevenseg':
+      case 'lcd7':
         return [[t('digit'), () => shownDigit(r()?.extra ?? {})]];
+      case 'aswitch':
+        return [[t('connectedTo'), () => (x('sel') ? 'A' : 'B')]];
+      case 'irrx':
+        return [
+          [t('current'), () => fmt(x('light'), 'A')],
+          [t('voltage'), v],
+        ];
       case 'opamp':
         return [
           [t('vdiff'), () => fmt(x('vd'), 'V')],

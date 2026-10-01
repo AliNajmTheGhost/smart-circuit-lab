@@ -58,6 +58,7 @@ export class Engine {
       this.devices.push(d);
       this.byId.set(p.id, d);
     }
+    for (const d of this.devices) d.link?.(this.devices);
     this.nonlinear = this.devices.some((d) => d.nonlinear);
   }
 

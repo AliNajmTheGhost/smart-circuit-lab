@@ -118,6 +118,8 @@ export abstract class Device {
     return null;
   }
   load(_s: unknown): void {}
+  /** Called once all devices exist, for parts that interact without wires (infrared light). */
+  link?(all: Device[]): void;
 }
 
 // ---------------------------------------------------------------- linear parts
@@ -634,7 +636,10 @@ class Transformer extends Device {
 
 // ---------------------------------------------------------------- diodes
 
-type DiodeKind = 'diode' | 'schottky' | 'zener' | 'led' | 'photodiode';
+type DiodeKind = 'diode' | 'schottky' | 'zener' | 'led' | 'photodiode' | 'irled' | 'irrx';
+
+/** Light-emitting kinds: rated current, brightness and burn-out work the same way. */
+const EMITS = new Set<DiodeKind>(['led', 'irled']);
 
 class Diode extends Device {
   readonly nonlinear = true;
@@ -654,6 +659,9 @@ class Diode extends Device {
         return { Is: 2.5e-9, nvt: 1.75 * VT, vz: Math.max(this.num('Vz', 5.1), 0.5), ibv: 5e-3 };
       case 'led':
         return ledModel(String(this.part.params.color));
+      case 'irled':
+        // Infrared LEDs drop about 1.2 V at 10 mA.
+        return { Is: 0.01 / Math.exp(1.2 / (2 * VT)), nvt: 2 * VT, vz: 0, ibv: 0 };
       default:
         return { Is: 2.5e-9, nvt: 1.75 * VT, vz: 0, ibv: 0 };
     }
@@ -709,7 +717,7 @@ class Diode extends Device {
   }
   limits(): Issue | null {
     const i = this.cur[0];
-    if (this.kind === 'led') {
+    if (EMITS.has(this.kind)) {
       const max = this.num('Imax', 0.02);
       return i > 3 * max ? { level: 'burn', key: 'burn.led', vars: { i, max } } : null;
     }
@@ -722,14 +730,14 @@ class Diode extends Device {
     return Math.abs(i) > 2 * max ? { level: 'burn', key: 'burn.diode', vars: { i: Math.abs(i), max } } : null;
   }
   advice(): Issue | null {
-    if (this.kind !== 'led') return null;
+    if (!EMITS.has(this.kind)) return null;
     const max = this.num('Imax', 0.02);
     if (this.cur[0] > 1.5 * max) return { level: 'warn', key: 'warn.ledHigh', vars: { i: this.cur[0], max } };
     if (this.vLast < -1) return { level: 'info', key: 'info.ledReverse' };
     return null;
   }
   extra(): Record<string, number> {
-    return this.kind === 'led' ? { brightness: Math.max(0, this.cur[0]) / this.num('Imax', 0.02) } : {};
+    return EMITS.has(this.kind) ? { brightness: Math.max(0, this.cur[0]) / this.num('Imax', 0.02) } : {};
   }
   save(): unknown {
     return this.vLast;
@@ -1736,6 +1744,108 @@ class TLine extends Device {
   }
 }
 
+/**
+ * Infrared receiver: a photodiode lit by every IR transmitter on the same channel.
+ * Its light follows the transmitters' current from the previous step.
+ */
+class IrReceiver extends Diode {
+  private all: Device[] = [];
+  constructor(part: Part, nodes: number[]) {
+    super(part, nodes, 'irrx');
+  }
+  link(all: Device[]): void {
+    this.all = all;
+  }
+  photo(): number {
+    if (this.part.params.path === 'blocked') return 0;
+    const ch = String(this.part.params.ch);
+    let tx = 0;
+    for (const d of this.all)
+      if (d instanceof Diode && d.kind === 'irled' && !d.broken && String(d.part.params.ch) === ch) tx += Math.max(0, d.cur[0]);
+    return (tx / 0.02) * this.num('Isc', 200e-6);
+  }
+  extra(): Record<string, number> {
+    return { light: this.photo() };
+  }
+}
+
+/** Liquid-crystal 7-segment display: a segment darkens with the RMS voltage across it. */
+class Lcd7 extends Device {
+  private sq = [0, 0, 0, 0, 0, 0, 0];
+  stamp(s: Stamper): void {
+    for (let i = 0; i < 7; i++) s.g(this.nodes[i], this.nodes[7], 1e-8);
+  }
+  accept(c: Ctx): void {
+    const com = this.v(c.x, 7);
+    // Liquid crystal responds in a few tens of milliseconds.
+    const k = Math.min(1, c.dt / 0.02);
+    let sum = 0;
+    const cur = this.nodes.map(() => 0);
+    for (let i = 0; i < 7; i++) {
+      const v = this.v(c.x, i) - com;
+      this.sq[i] += k * (v * v - this.sq[i]);
+      cur[i] = v * 1e-8;
+      sum += cur[i];
+    }
+    cur[7] = -sum;
+    this.cur = cur;
+  }
+  ac(s: AcStamper): void {
+    for (let i = 0; i < 7; i++) s.y(this.nodes[i], this.nodes[7], 1e-8);
+  }
+  extra(): Record<string, number> {
+    const out: Record<string, number> = {};
+    // Liquid crystal turns from clear to dark between about 1 V and 2.5 V RMS.
+    'abcdefg'.split('').forEach((c, i) => (out[`seg_${c}`] = Math.max(0, Math.min(1, (Math.sqrt(this.sq[i]) - 1) / 1.5))));
+    return out;
+  }
+  save(): unknown {
+    return this.sq;
+  }
+  load(s: unknown): void {
+    if (Array.isArray(s) && s.length === 7) this.sq = s.map(Number);
+  }
+}
+
+/** CD4053-style analogue switch: COM joins A when SEL is high, B when low; works both ways. */
+class AnalogSwitch extends Device {
+  sel = 0;
+  ron(): number {
+    return Math.max(this.num('Ron', 50), 1e-3);
+  }
+  stamp(s: Stamper): void {
+    const [com, a, b, sel] = this.nodes;
+    s.g(com, a, this.sel ? 1 / this.ron() : 1e-9);
+    s.g(com, b, this.sel ? 1e-9 : 1 / this.ron());
+    s.g(sel, -1, 1e-6);
+  }
+  accept(c: Ctx): void {
+    const g = 1 / this.ron();
+    const vc = this.v(c.x, 0);
+    const ia = (this.v(c.x, 1) - vc) * (this.sel ? g : 1e-9);
+    const ib = (this.v(c.x, 2) - vc) * (this.sel ? 1e-9 : g);
+    const vs = this.v(c.x, 3);
+    this.cur = [-(ia + ib), ia, ib, vs * 1e-6];
+    // The new position takes effect next step, like a real switch's small delay.
+    this.sel = level(vs, this.sel);
+  }
+  ac(s: AcStamper): void {
+    const [com, a, b, sel] = this.nodes;
+    s.y(com, a, this.sel ? 1 / this.ron() : 1e-9);
+    s.y(com, b, this.sel ? 1e-9 : 1 / this.ron());
+    s.y(sel, -1, 1e-6);
+  }
+  extra(): Record<string, number> {
+    return { sel: this.sel };
+  }
+  save(): unknown {
+    return this.sel;
+  }
+  load(s: unknown): void {
+    if (typeof s === 'number') this.sel = s;
+  }
+}
+
 class Probe extends Device {
   value = 0;
   stamp(): void {}
@@ -1789,6 +1899,14 @@ export function createDevice(part: Part, nodes: number[]): Device {
     case 'led':
     case 'photodiode':
       return new Diode(part, nodes, part.type);
+    case 'irtx':
+      return new Diode(part, nodes, 'irled');
+    case 'irrx':
+      return new IrReceiver(part, nodes);
+    case 'lcd7':
+      return new Lcd7(part, nodes);
+    case 'aswitch':
+      return new AnalogSwitch(part, nodes);
     case 'scr':
       return new Thyristor(part, nodes, false);
     case 'triac':

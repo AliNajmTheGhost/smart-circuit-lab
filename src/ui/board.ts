@@ -1,7 +1,7 @@
 import { t } from '../i18n';
-import { insertIntoWires, lWires, makePart, newId } from '../model/docops';
+import { insertIntoWires, makePart, newId, routeWire } from '../model/docops';
 import { defOf, pinWorld } from '../model/library';
-import { GRID, keyOf, rotatePt, snap, type CircuitDoc, type Part, type Pt } from '../model/types';
+import { GRID, keyOf, rotatePt, snap, type CircuitDoc, type Part, type Pt, type Wire } from '../model/types';
 import { fmt } from '../units';
 import type { App } from './app';
 import { symbolSvg } from './symbols';
@@ -41,7 +41,7 @@ type Drag =
       pointer: number;
     }
   | { kind: 'box'; start: Pt; cur: Pt; add: boolean; pointer: number }
-  | { kind: 'wire'; from: Pt; moved: boolean; onWire: boolean; pointer: number }
+  | { kind: 'wire'; from: Pt; moved: boolean; onWire: boolean; pointer: number; hFirst?: boolean }
   | { kind: 'pan'; start: Pt; orig: Pt; pointer: number }
   | { kind: 'pinch'; dist: number; zoom: number; mid: Pt; pan: Pt };
 
@@ -101,6 +101,7 @@ export class Board {
   private pointers = new Map<number, Pt>();
   private drag: Drag | null = null;
   private pendingWire: Pt | null = null;
+  private pendingDir: boolean | undefined;
   private hover: Pt | null = null;
   private hoverWorld: Pt = { x: 0, y: 0 };
   private neutral: [number, number, number] = [120, 130, 140];
@@ -249,7 +250,7 @@ export class Board {
 
   /** Nearest pin or wire end within reach of the pointer. */
   private connectable(w: Pt, touch: boolean): Pt | null {
-    const reach = (touch ? 20 : 11) / this.zoom;
+    const reach = (touch ? 22 : 14) / this.zoom;
     let best: Pt | null = null;
     let bd = reach * reach;
     const test = (p: Pt) => {
@@ -303,8 +304,9 @@ export class Board {
 
     if (this.pendingWire) {
       const end = this.connectable(w, touch) ?? s;
-      this.addWire(this.pendingWire, end);
+      this.addWire(this.pendingWire, end, this.pendingDir);
       this.pendingWire = null;
+      this.pendingDir = undefined;
       this.updateHint();
       this.drawOverlay();
       return;
@@ -442,7 +444,9 @@ export class Board {
     if (d?.kind === 'wire') {
       const s = { x: snap(w.x), y: snap(w.y) };
       if (s.x !== d.from.x || s.y !== d.from.y) d.moved = true;
+      d.hFirst ??= this.firstDirection(d.from, w);
     }
+    if (this.pendingWire) this.pendingDir ??= this.firstDirection(this.pendingWire, w);
     this.hover = this.app.placing ? null : this.connectable(w, e.pointerType === 'touch');
     this.drawOverlay();
     this.drawGhost();
@@ -491,9 +495,10 @@ export class Board {
       const w = this.world(e);
       const end = this.connectable(w, e.pointerType === 'touch') ?? { x: snap(w.x), y: snap(w.y) };
       if (d.moved && (end.x !== d.from.x || end.y !== d.from.y)) {
-        this.addWire(d.from, end);
+        this.addWire(d.from, end, d.hFirst);
       } else if (!d.onWire) {
         this.pendingWire = d.from;
+        this.pendingDir = undefined;
         this.updateHint();
       }
       this.drawOverlay();
@@ -526,8 +531,23 @@ export class Board {
     this.drag = null;
   }
 
-  private addWire(a: Pt, b: Pt): void {
-    const wires = lWires(a, b);
+  /**
+   * Which way the wire leaves its start: the way the pointer first moved, once it has moved
+   * far enough to tell. This decides where the corner of an L-shaped wire goes.
+   */
+  private firstDirection(from: Pt, w: Pt): boolean | undefined {
+    const dx = w.x - from.x;
+    const dy = w.y - from.y;
+    if (Math.hypot(dx, dy) < 12 / this.zoom) return undefined;
+    return Math.abs(dx) >= Math.abs(dy);
+  }
+
+  private route(a: Pt, b: Pt, hFirst?: boolean): Wire[] {
+    return routeWire(this.app.doc, a, b, hFirst);
+  }
+
+  private addWire(a: Pt, b: Pt, hFirst?: boolean): void {
+    const wires = this.route(a, b, hFirst);
     if (wires.length) this.app.commit((d) => d.wires.push(...wires));
   }
 
@@ -743,19 +763,19 @@ export class Board {
     if (d?.kind === 'wire' && d.moved) {
       const w = this.hoverWorld;
       const end = this.hover ?? { x: snap(w.x), y: snap(w.y) };
-      out.push(this.previewWire(d.from, end));
+      out.push(this.previewWire(d.from, end, d.hFirst));
     } else if (this.pendingWire) {
       const w = this.hoverWorld;
       const end = this.hover ?? { x: snap(w.x), y: snap(w.y) };
-      out.push(this.previewWire(this.pendingWire, end));
+      out.push(this.previewWire(this.pendingWire, end, this.pendingDir));
       out.push(`<circle class="pinhover" cx="${this.pendingWire.x}" cy="${this.pendingWire.y}" r="7"/>`);
     }
     if (this.hover) out.push(`<circle class="pinhover" cx="${this.hover.x}" cy="${this.hover.y}" r="7"/>`);
     this.gOver.innerHTML = out.join('');
   }
 
-  private previewWire(a: Pt, b: Pt): string {
-    const ws = lWires(a, b);
+  private previewWire(a: Pt, b: Pt, hFirst?: boolean): string {
+    const ws = this.route(a, b, hFirst);
     return ws.map((w) => `<line class="wirepreview" x1="${w.a.x}" y1="${w.a.y}" x2="${w.b.x}" y2="${w.b.y}"/>`).join('');
   }
 
@@ -811,7 +831,7 @@ export class Board {
       const broken = app.broken.has(p.id);
       const x = dev.extra();
       for (const f of r.flows) this.animateFlow(f.el, broken ? 0 : (dev.cur[f.pin] ?? 0) * f.sign, moving ? dt : 0, !!wireI);
-      if (p.type === 'lamp' || p.type === 'led') {
+      if (p.type === 'lamp' || p.type === 'led' || p.type === 'irtx') {
         const b = broken ? 0 : Math.max(0, Math.min(1.2, x.brightness ?? 0));
         const k = Math.sqrt(Math.min(1, b));
         for (const g of r.glows) g.style.opacity = String(k * 0.85);
@@ -829,7 +849,7 @@ export class Board {
         const ratio = x.heat ?? 0;
         r.heat.style.fillOpacity = String(Math.min(0.9, Math.max(0, (ratio - 0.5) * 1.6)));
       }
-      if (p.type === 'sevenseg') {
+      if (p.type === 'sevenseg' || p.type === 'lcd7') {
         for (const seg of r.segs) {
           const b = broken ? 0 : Math.min(1, x[`seg_${seg.dataset.seg}`] ?? 0);
           seg.style.opacity = String(0.1 + 0.9 * Math.sqrt(b));

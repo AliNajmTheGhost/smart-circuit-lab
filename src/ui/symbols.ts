@@ -280,6 +280,49 @@ export function symbolSvg(type: string, params: Record<string, ParamValue>, std:
         L(-40, 20, 40, 20, ' class="plate"') +
         T(0, 5, 'Z0', ' class="sym-text small"')
       );
+    case 'lcd7': {
+      let out = `<rect class="lcdbody" x="-20" y="-70" width="60" height="140" rx="5"/>`;
+      'abcdefg'.split('').forEach((c, i) => {
+        const y = -60 + 20 * i;
+        out += L(-40, y, -20, y) + T(-30, y - 3, c, ' class="sym-text tiny"');
+        const [x, sy, w, h] = SEG_SHAPES[c];
+        out += `<rect class="seg lcdseg" data-seg="${c}" x="${x + 2}" y="${sy}" width="${w}" height="${h}" rx="1.5"/>`;
+      });
+      return out + L(0, 70, 0, 100) + T(14, 90, 'COM', ' class="sym-text pin"');
+    }
+    case 'irtx':
+      return (
+        C(0, 0, 17, ' class="glow" fill="#ef4444"') +
+        `<polygon class="ledbody" points="-10,-10 -10,10 10,0" fill="#7f1d1d"/>` +
+        L(-40, 0, -10, 0) +
+        L(10, 0, 40, 0) +
+        L(10, -10, 10, 10, ' class="plate"') +
+        L(-1, -12, 7, -20) +
+        arrowHead(-1, -12, 9, -22, 6) +
+        L(6, -8, 14, -16) +
+        arrowHead(6, -8, 16, -18, 6) +
+        T(-24, -12, 'IR', ' class="sym-text tiny"')
+      );
+    case 'irrx':
+      return diodeBody(L(10, -10, 10, 10, ' class="plate"')) + lightIn(0, -10) + T(24, -12, 'IR', ' class="sym-text tiny"');
+    case 'aswitch':
+      return (
+        L(-40, -20, -24, -20) +
+        L(-40, 20, -24, 20) +
+        L(24, 0, 40, 0) +
+        L(0, 32, 0, 40) +
+        `<rect class="bg ic" x="-24" y="-32" width="48" height="64" rx="3"/>` +
+        C(-12, -20, 2.5, ' class="fill"') +
+        C(-12, 20, 2.5, ' class="fill"') +
+        C(12, 0, 2.5, ' class="fill"') +
+        L(-24, -20, -12, -20) +
+        L(-24, 20, -12, 20) +
+        L(12, 0, 24, 0) +
+        L(12, 0, -11, -17, ' class="lever"') +
+        T(-16, -8, 'A', ' class="sym-text pin"') +
+        T(-16, 32 - 4, 'B', ' class="sym-text pin"') +
+        T(0, 28, 'SEL', ' class="sym-text pin"')
+      );
     case 'psu':
       return (
         L(0, -40, 0, -24) +
