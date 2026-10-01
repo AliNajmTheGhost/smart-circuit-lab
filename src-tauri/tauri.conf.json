@@ -1,0 +1,75 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Nabd",
+  "version": "0.2.0",
+  "identifier": "app.nabd.lab",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5190",
+    "beforeDevCommand": "npm run dev -- --port 5190 --strictPort",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "نبض · مختبر الدوائر",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 360,
+        "minHeight": 480,
+        "resizable": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "publisher": "Nabd",
+    "shortDescription": "مختبر محاكاة الدوائر الكهربائية والإلكترونية",
+    "longDescription": "نبض: برنامج عربي لمحاكاة الدوائر الكهربائية والإلكترونية لطلاب التعليم المهني، يعمل بدون إنترنت.",
+    "category": "Education",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "nabd"
+        ],
+        "name": "Nabd circuit",
+        "description": "دائرة نبض",
+        "role": "Editor",
+        "mimeType": "application/x-nabd"
+      }
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "Arabic",
+          "English"
+        ],
+        "displayLanguageSelector": false,
+        "installerIcon": "icons/icon.ico"
+      },
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      }
+    },
+    "android": {
+      "minSdkVersion": 24
+    }
+  },
+  "mainBinaryName": "Nabd"
+}

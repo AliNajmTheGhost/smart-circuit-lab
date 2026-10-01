@@ -4,6 +4,7 @@
 use crate::catalog::catalog;
 use crate::devices::{self, Ctx, Extra, Io, Issue, Level, Model};
 use crate::doc::{CircuitDoc, ParamValue, Params};
+use crate::fault::Fault;
 use crate::linalg::{LuSolver, solve_complex};
 use crate::netlist::{Netlist, Node, build_netlist};
 use crate::stamp::{AcStamper, Stamper};
@@ -23,6 +24,8 @@ pub struct Device {
     pub params: Params,
     pub io: Io,
     pub model: Box<dyn Model>,
+    /// A hidden fault set by a repair challenge; the model is bypassed while it lasts.
+    pub fault: Fault,
 }
 
 /// Why the simulation stopped.
@@ -117,6 +120,7 @@ impl Engine {
                 params: p.params.clone(),
                 io: Io { index: i, nodes, cur: vec![0.0; len], broken: broken.contains(&p.id), limited: false },
                 model,
+                fault: Fault::from_params(&p.params),
             });
         }
         let n = next;
@@ -182,6 +186,7 @@ impl Engine {
         let d = &mut self.devices[i];
         d.params.insert(key.to_string(), value);
         d.model.configure(&d.params);
+        d.fault = Fault::from_params(&d.params);
         if key == "ch" {
             self.link_ir();
         }
@@ -196,6 +201,7 @@ impl Engine {
                 if d.params != p.params {
                     d.params = p.params.clone();
                     d.model.configure(&d.params);
+                    d.fault = Fault::from_params(&d.params);
                 }
             }
         }
@@ -243,6 +249,10 @@ impl Engine {
                 stamper.clear();
                 for (d, &ir_light) in devices.iter_mut().zip(lights.iter()) {
                     d.io.limited = false;
+                    if d.fault != Fault::None {
+                        d.fault.stamp(stamper, &d.io.nodes);
+                        continue;
+                    }
                     let ctx = Ctx { t: t1, dt, x: guess, ir_light };
                     d.model.stamp(stamper, &ctx, &mut d.io);
                 }
@@ -287,6 +297,10 @@ impl Engine {
             let ir_light = if ir_links.is_empty() { 0.0 } else { Self::ir_light(devices, ir_links, i) };
             let ctx = Ctx { t: t1, dt, x, ir_light };
             let d = &mut devices[i];
+            if d.fault != Fault::None {
+                d.fault.accept(x, &d.io.nodes, &mut d.io.cur);
+                continue;
+            }
             d.model.accept(&ctx, &mut d.io);
             if d.io.broken {
                 continue;
@@ -321,7 +335,9 @@ impl Engine {
             let w = 2.0 * std::f64::consts::PI * f;
             s.clear();
             for d in &self.devices {
-                if !d.io.broken {
+                if d.fault != Fault::None {
+                    d.fault.ac(&mut s, &d.io.nodes);
+                } else if !d.io.broken {
                     d.model.ac(&mut s, w, &d.io);
                 }
             }
@@ -357,7 +373,7 @@ impl Engine {
         self.devices
             .iter()
             .enumerate()
-            .filter(|(_, d)| !d.io.broken)
+            .filter(|(_, d)| !d.io.broken && d.fault == Fault::None)
             .filter_map(|(i, d)| d.model.advice(&self.ctx_for(i), &d.io).map(|issue| PartIssue { part: d.id.clone(), issue }))
             .collect()
     }

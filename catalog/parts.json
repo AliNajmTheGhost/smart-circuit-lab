@@ -711,6 +711,52 @@
    "internalNodes": 0
   },
   {
+   "type": "speaker",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "R",
+     "def": 8
+    },
+    {
+     "key": "Pmax",
+     "def": 0.5
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "buzzer",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "V",
+     "def": 5
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
    "type": "sevenseg",
    "pins": [
     {

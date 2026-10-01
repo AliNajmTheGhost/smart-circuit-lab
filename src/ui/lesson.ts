@@ -16,6 +16,10 @@ export class LessonRunner {
   private passed = false;
   private hintShown = false;
 
+  /** Told when a lesson starts and when the student finishes its last step. */
+  onStart?: () => void;
+  onFinish?: (id: string) => void;
+
   constructor(
     private app: App,
     private board: Board,
@@ -55,6 +59,7 @@ export class LessonRunner {
 
   start(l: Lesson): void {
     this.lesson = l;
+    this.onStart?.();
     this.step = 0;
     this.passed = false;
     this.hintShown = false;
@@ -106,6 +111,7 @@ export class LessonRunner {
       if (a === 'next') {
         if (last) {
           toast(t('lessonDone'));
+          this.onFinish?.(l.id);
           this.close();
         } else this.go(this.step + 1);
       }
@@ -119,7 +125,7 @@ export class LessonRunner {
     this.render();
   }
 
-  private close(): void {
+  close(): void {
     this.lesson = null;
     this.render();
   }

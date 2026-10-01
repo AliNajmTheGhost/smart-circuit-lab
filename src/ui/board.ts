@@ -15,6 +15,8 @@ interface PartRefs {
   lin: SVGElement | null;
   lout: SVGElement | null;
   segs: SVGElement[];
+  /** Sound waves drawn above a speaker or buzzer. */
+  waves: SVGElement | null;
   flows: { el: SVGLineElement; pin: number; sign: number }[];
 }
 
@@ -331,7 +333,10 @@ export class Board {
       }
       if (!app.isSelected('part', id)) app.select({ kind: 'part', id });
       this.startGroupDrag(w, id, e.pointerId);
-      if (defOf(part.type).interactive === 'momentary') app.setParam(id, 'closed', 1, false);
+      if (defOf(part.type).interactive === 'momentary') {
+        app.setParam(id, 'closed', 1, false);
+        app.onSwitch?.();
+      }
       return;
     }
     if (wireEl) {
@@ -466,7 +471,10 @@ export class Board {
     if (d.kind === 'group') {
       const part = d.clicked ? app.part(d.clicked) : undefined;
       const def = part ? defOf(part.type) : undefined;
-      if (part && def?.interactive === 'momentary') app.setParam(part.id, 'closed', 0, false);
+      if (part && def?.interactive === 'momentary') {
+        app.setParam(part.id, 'closed', 0, false);
+        app.onSwitch?.();
+      }
       if (d.moved) {
         const moved = JSON.stringify(app.doc);
         app.doc = JSON.parse(d.snapshot);
@@ -480,6 +488,7 @@ export class Board {
       } else if (!cancelled && part && def?.interactive === 'toggle') {
         const key = part.type === 'logicin' ? 'state' : 'closed';
         app.setParam(part.id, key, Number(part.params[key]) === 1 ? 0 : 1, false);
+        app.onSwitch?.();
       } else if (!cancelled && part && app.selCount > 1) {
         // A plain click on one item of a group selects just that item.
         app.select({ kind: 'part', id: part.id });
@@ -720,6 +729,7 @@ export class Board {
         lin: g.querySelector('.lin'),
         lout: g.querySelector('.lout'),
         segs: [...g.querySelectorAll<SVGElement>('.seg')],
+        waves: g.querySelector('.waves'),
         flows: [],
       });
     }
@@ -836,6 +846,11 @@ export class Board {
         const b = broken ? 0 : Math.max(0, Math.min(1.2, x.brightness ?? 0));
         const k = Math.sqrt(Math.min(1, b));
         for (const g of r.glows) g.style.opacity = String(k * 0.85);
+      }
+      if (r.waves) {
+        const loud = broken || !moving ? 0 : Math.min(1, x.loud ?? 0);
+        r.waves.style.opacity = String(loud > 0.01 ? 0.35 + 0.65 * loud : 0);
+        r.waves.classList.toggle('playing', loud > 0.01);
       }
       if (p.type === 'logicout') {
         for (const g of r.glows) g.style.opacity = x.level ? '0.9' : '0';

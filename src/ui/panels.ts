@@ -1,11 +1,15 @@
 import type { App } from './app';
 import type { Board } from './board';
 import { DoctorPanel } from './doctor';
-import { popSound } from './dom';
 import { Inspector } from './inspector';
 import { LessonRunner } from './lesson';
 import { Palette } from './palette';
 import { Scope } from './scope';
+import { ProgressStore } from '../progress/store';
+import { ProgressWatcher } from '../progress/watcher';
+import { badgePopup, showAchievements } from './achievements';
+import { ChallengeRunner } from './challenge';
+import { Sound } from './sound';
 import { Toolbar } from './toolbar';
 import { showWelcome } from './welcome';
 
@@ -17,6 +21,10 @@ export class Panels {
   private doctor: DoctorPanel;
   private palette: Palette;
   private lesson: LessonRunner;
+  readonly sound: Sound;
+  readonly progress = new ProgressStore();
+  private watcher: ProgressWatcher;
+  private challenge: ChallengeRunner;
   /** True when the board started with a circuit restored from last time. */
   restored = false;
 
@@ -32,6 +40,9 @@ export class Panels {
     this.toolbar = new Toolbar(app, board, this.scope, {
       openLessons: () => this.lesson.chooser(),
       openWelcome: () => this.welcome(),
+      openAchievements: () => showAchievements(this.progress),
+      openChallenges: () => this.challenge.chooser(),
+      exampleOpened: (id) => this.watcher.exampleOpened(id),
       rebuild: () => this.rebuild(),
     });
     // Opening or closing the instrument panel changes the board's size: re-fit the circuit to it.
@@ -43,8 +54,39 @@ export class Panels {
         requestAnimationFrame(() => board.fit());
       }
     });
-    app.on('frame', () => this.frame());
-    app.onDamage = () => popSound();
+    this.sound = new Sound(app);
+    this.watcher = new ProgressWatcher(app, this.progress);
+    this.progress.onUnlock((id) => {
+      this.sound.chime();
+      badgePopup(id);
+    });
+    this.challenge = new ChallengeRunner(app, board, this.scope, {
+      stars: (id) => this.progress.challengeStars(id),
+      solved: (id, stars) => {
+        this.watcher.challengeFinished(id, stars);
+        this.sound.chime();
+      },
+      wrong: () => this.sound.pop(),
+      started: () => {
+        this.lesson.close();
+        this.watcher.loadedReadyMade();
+      },
+    });
+    this.lesson.onStart = () => {
+      this.challenge.close();
+      this.watcher.lessonStarted();
+    };
+    this.lesson.onFinish = (id) => this.watcher.lessonFinished(id);
+    app.on('frame', () => {
+      this.frame();
+      this.sound.update();
+      this.watcher.frame(performance.now());
+    });
+    app.onDamage = () => {
+      this.sound.pop();
+      this.watcher.partBurned();
+    };
+    app.onSwitch = () => this.sound.click();
     window.addEventListener('keydown', (e) => this.keys(e));
   }
 
@@ -91,7 +133,7 @@ export class Panels {
       app.redo();
     } else if (ctrl && k === 's') {
       e.preventDefault();
-      app.exportFile();
+      void app.exportFile();
     } else if (ctrl && k === 'a') {
       e.preventDefault();
       app.selectAll();

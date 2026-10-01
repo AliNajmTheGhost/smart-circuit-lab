@@ -5,6 +5,7 @@ import { emptyDoc, type CircuitDoc, type Part } from '../model/types';
 import type { DoctorNote } from '../sim/doctor';
 import type { PartIssue } from '../sim/engine';
 import { WasmEngine as Engine } from '../sim/wasm/engine';
+import { saveCircuitFile } from '../platform/files';
 import type { SymbolStd } from './symbols';
 
 export type Selection = { kind: 'part' | 'wire'; id: string } | null;
@@ -39,6 +40,8 @@ export class App {
   speed = 1;
   showVolt = true;
   showCurrent = true;
+  /** Speakers, buzzers, clicks and crackles. */
+  sound = true;
   scopeOpen = false;
   /** 'system' follows the device; light and dark are explicit choices. */
   theme: Theme = 'system';
@@ -314,6 +317,8 @@ export class App {
   }
 
   onDamage?: () => void;
+  /** A switch, push button or logic switch was flipped by the student. */
+  onSwitch?: () => void;
 
   private notesKey = '';
   private refreshNotes(): void {
@@ -354,7 +359,7 @@ export class App {
     this.emit('select');
   }
 
-  setOption<K extends 'std' | 'speed' | 'showVolt' | 'showCurrent' | 'scopeOpen' | 'theme'>(k: K, v: App[K]): void {
+  setOption<K extends 'std' | 'speed' | 'showVolt' | 'showCurrent' | 'scopeOpen' | 'theme' | 'sound'>(k: K, v: App[K]): void {
     (this as App)[k] = v;
     if (k === 'theme') applyTheme(this.theme);
     this.saveSettings();
@@ -371,6 +376,7 @@ export class App {
           speed: this.speed,
           showVolt: this.showVolt,
           showCurrent: this.showCurrent,
+          sound: this.sound,
           lang: getLang(),
           scopeOpen: this.scopeOpen,
           theme: this.theme,
@@ -392,6 +398,7 @@ export class App {
     if (typeof s.speed === 'number' && SPEEDS[s.speed]) this.speed = s.speed;
     if (typeof s.showVolt === 'boolean') this.showVolt = s.showVolt;
     if (typeof s.showCurrent === 'boolean') this.showCurrent = s.showCurrent;
+    if (typeof s.sound === 'boolean') this.sound = s.sound;
     if (typeof s.scopeOpen === 'boolean') this.scopeOpen = s.scopeOpen;
     if (s.theme === 'light' || s.theme === 'dark' || s.theme === 'system') this.theme = s.theme;
     applyTheme(this.theme);
@@ -419,18 +426,15 @@ export class App {
     }
   }
 
-  exportFile(): void {
-    const blob = new Blob([JSON.stringify(this.doc, null, 1)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${this.doc.title || 'circuit'}.nabd`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  /** Save the circuit as a .nabd file. Resolves false if the student cancelled. */
+  exportFile(): Promise<boolean> {
+    return saveCircuitFile(this.doc.title || 'circuit', JSON.stringify(this.doc, null, 1));
   }
 
-  async importFile(file: File): Promise<boolean> {
+  /** Open a circuit from the text of a .nabd file. Resolves false if it is not a circuit. */
+  async importText(text: string): Promise<boolean> {
     try {
-      const d = JSON.parse(await file.text());
+      const d = JSON.parse(text);
       if (!isDoc(d)) return false;
       for (const p of d.parts) defOf(p.type);
       this.load(d);

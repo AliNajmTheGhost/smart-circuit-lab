@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EXAMPLES } from '../src/examples';
 import type { CircuitDoc } from '../src/model/types';
-import { Engine } from './engine';
+import { Engine, ENGINE_KIND } from './engine';
 
 const example = (id: string) => EXAMPLES.find((e) => e.id === id)!.build();
 const part = (doc: CircuitDoc, type: string, nth = 0) => doc.parts.filter((p) => p.type === type)[nth];
@@ -75,5 +75,21 @@ describe('LCD display', () => {
     const seg = e.byId.get(part(doc, 'lcd7').id)!.extra();
     for (const on of ['seg_b', 'seg_c', 'seg_f', 'seg_g']) expect(seg[on]).toBeGreaterThan(0.8);
     for (const off of ['seg_a', 'seg_d', 'seg_e']) expect(seg[off]).toBeLessThan(0.1);
+  });
+});
+
+describe('sound', () => {
+  // Parts added after the move to Rust exist only in the Rust engine.
+  it.skipIf(ENGINE_KIND === 'ts')('the 555 tone generator makes the speaker sing near 1.4 kHz', () => {
+    const doc = example('tone-555');
+    const e = new Engine(doc);
+    for (let i = 0; i < 20000; i++) e.step();
+    const spk = part(doc, 'speaker').id;
+    const x = e.byId.get(spk)!.extra();
+    // f = 1.44 / ((R1 + 2·R2)·C) ≈ 1.39 kHz
+    expect(x.f).toBeGreaterThan(1200);
+    expect(x.f).toBeLessThan(1600);
+    expect(x.loud).toBeGreaterThan(0.05);
+    expect(e.failure).toBeNull();
   });
 });

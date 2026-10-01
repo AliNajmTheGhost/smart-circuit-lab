@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { EXAMPLES } from '../src/examples';
-import { checks } from './engine';
+import { checks, ENGINE_KIND } from './engine';
 import { Engine } from './engine';
 
 describe('examples', () => {
   for (const ex of EXAMPLES) {
-    it(`${ex.id}: every pin is wired and it simulates cleanly`, () => {
+    // Parts added after the move to Rust exist only in the Rust engine.
+    const rustOnly = ex.build().parts.some((p) => p.type === 'speaker' || p.type === 'buzzer');
+    it.skipIf(rustOnly && ENGINE_KIND === 'ts')(`${ex.id}: every pin is wired and it simulates cleanly`, () => {
       const doc = ex.build();
       const e = new Engine(doc);
       const notes = checks(doc, e).filter((n) => n.level !== 'info');

@@ -9,6 +9,7 @@ mod misc;
 mod opamp;
 mod passive;
 mod semis;
+mod sound;
 mod sources;
 mod storage;
 mod timer;
@@ -202,6 +203,8 @@ pub fn create(kind: &str, p: &Params, pins: usize) -> Box<dyn Model> {
         "ammeter" => Box::new(meters::Ammeter::default()),
         "multimeter" => Box::new(meters::Multimeter::default()),
         "probe" => Box::new(misc::Probe::default()),
+        "speaker" => Box::new(sound::Speaker::default()),
+        "buzzer" => Box::new(sound::Buzzer::default()),
         _ => match digital::GateFn::from_kind(kind) {
             Some(f) => Box::new(digital::gate(f, pins)),
             None => Box::new(misc::Nothing),

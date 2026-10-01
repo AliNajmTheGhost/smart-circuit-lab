@@ -630,6 +630,42 @@ export const PARTS: PartDef[] = [
   },
 
   {
+    type: 'speaker',
+    ar: 'سماعة',
+    en: 'Loudspeaker',
+    cat: 'output',
+    prefix: 'LS',
+    pins: two({ ar: 'الطرف +', en: 'Terminal +' }, { ar: 'الطرف −', en: 'Terminal −' }),
+    params: [
+      { key: 'R', ar: 'مقاومة الملف', en: 'Coil resistance', unit: 'Ω', def: 8, min: 0.1 },
+      { key: 'Pmax', ar: 'القدرة المقننة', en: 'Rated power', unit: 'W', def: 0.5, min: 0.001 },
+    ],
+    box: { x: -40, y: -26, w: 80, h: 52 },
+    labelAt: { x: 0, y: -34 },
+    desc: {
+      ar: 'تحوّل الإشارة الكهربائية إلى صوت تسمعه فعلاً. صِلها بمولد الإشارة أو بمخرج المؤقت 555 وغيّر التردد لتسمع النغمة تتغير.',
+      en: 'Turns the signal into sound you can really hear. Connect it to a function generator or a 555 output and change the frequency.',
+    },
+    valueText: (p) => fmtShort(num(p, 'R'), 'Ω'),
+  },
+  {
+    type: 'buzzer',
+    ar: 'جرس إلكتروني (طنّان)',
+    en: 'Buzzer',
+    cat: 'output',
+    prefix: 'BZ',
+    pins: two(PLUS, MINUS),
+    params: [{ key: 'V', ar: 'الجهد المقنن', en: 'Rated voltage', unit: 'V', def: 5, min: 0.5 }],
+    box: { x: -40, y: -24, w: 80, h: 44 },
+    labelAt: { x: 0, y: -32 },
+    desc: {
+      ar: 'يصفّر بنغمة ثابتة عندما يصله جهد قريب من جهده المقنن، والطرف + إلى الموجب.',
+      en: 'Beeps at its own pitch when it gets close to its rated voltage, + to positive.',
+    },
+    valueText: (p) => fmtShort(num(p, 'V'), 'V'),
+  },
+
+  {
     type: 'sevenseg',
     ar: 'عارضة القطع السبع',
     en: '7-segment display',

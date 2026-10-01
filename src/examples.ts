@@ -420,6 +420,37 @@ export const EXAMPLES: Example[] = [
     },
   },
   {
+    id: 'tone-555',
+    grade: 2,
+    ar: 'مولد نغمات بالمؤقت 555 والسماعة',
+    en: '555 tone generator with a speaker',
+    scopeWindow: 0.005,
+    build() {
+      // Same circuit as the blinking LED with a 100 nF capacitor: about 1.4 kHz you can hear.
+      // Change R2 or C1 and the pitch changes.
+      const b = new Builder('مولد نغمات');
+      b.add('battery', 0, 0, 0, { V: 9 });
+      b.add('ground', 0, 160);
+      b.add('timer555', 300, 0);
+      b.add('resistor', 160, -120, 1, { R: 1000 });
+      b.add('resistor', 160, 0, 1, { R: 4700 });
+      b.add('capacitor', 160, 120, 1, { C: 100e-9 });
+      b.add('resistor', 400, 0, 0, { R: 100 });
+      b.add('speaker', 440, 40, 1);
+      b.add('probe', 360, 0, 0, { ch: '1' });
+      b.path(P(0, -40), P(0, -160), P(320, -160));
+      b.path(P(280, -80), P(280, -160));
+      b.path(P(320, -80), P(320, -160));
+      b.path(P(160, -80), P(160, -40), P(240, -40));
+      b.path(P(160, 40), P(240, 40));
+      b.path(P(240, 0), P(240, 40));
+      b.path(P(160, 40), P(160, 80));
+      b.path(P(0, 40), P(0, 160), P(440, 160), P(440, 80));
+      b.path(P(300, 80), P(300, 160));
+      return b.done();
+    },
+  },
+  {
     id: 'counter',
     grade: 2,
     ar: 'عداد مع عارضة القطع السبع',

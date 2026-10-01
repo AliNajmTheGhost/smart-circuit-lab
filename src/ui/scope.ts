@@ -422,13 +422,15 @@ export class Scope {
     const nodes = this.probes.map((id) => (id ? e.byId.get(id)?.nodes[0] : undefined));
     const key = `${nodes.join()}|${this.timeDiv}`;
     if (e !== this.watched || key !== this.watchKey) {
+      // Different probes or a different circuit: the old trace no longer applies.
+      if (key !== this.watchKey) this.clear();
       e.watch(nodes.map((n) => n ?? -1), (this.timeDiv * HDIV) / PER_SCREEN);
       this.watched = e;
       this.watchKey = key;
     }
     const { t, v } = e.takeTrace();
-    if (!this.app.scopeOpen || !this.running) return;
     this.has = nodes.map((n) => n !== undefined);
+    if (!this.app.scopeOpen || !this.running) return;
     if (e.t < this.lastT) this.clear();
     for (let k = 0; k < t.length; k++) {
       if (t[k] < this.lastT) this.clear();

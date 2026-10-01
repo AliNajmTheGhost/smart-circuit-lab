@@ -14,6 +14,7 @@ pub mod devices;
 pub mod doc;
 pub mod doctor;
 pub mod engine;
+pub mod fault;
 pub mod linalg;
 pub mod netlist;
 pub mod stamp;

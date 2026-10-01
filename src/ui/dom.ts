@@ -43,6 +43,7 @@ const ICON: Record<string, string> = {
   warn: 'M12 3l10 18H2z M12 10v5 M12 18h.01',
   info: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 11v6 M12 7.5h.01',
   check: 'M4 12.5l5 5L20 6.5',
+  trophy: 'M7 4h10v5a5 5 0 0 1-10 0z M7 6H4v1a3 3 0 0 0 3 3 M17 6h3v1a3 3 0 0 1-3 3 M12 14v4 M8 20h8',
   chevron: 'M9 6l6 6-6 6',
   bolt: 'M13 2L4 14h7l-1 8 9-12h-7z',
   grid: 'M3 3h18v18H3z M3 9h18 M3 15h18 M9 3v18 M15 3v18',
@@ -125,25 +126,4 @@ export function popover(anchor: HTMLElement, html: string, bind: (el: HTMLElemen
   };
   setTimeout(() => document.addEventListener('pointerdown', outside, true));
   bind(el, close);
-}
-
-/** Short crackle when a part burns, made with the Web Audio API. */
-export function popSound(): void {
-  try {
-    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const ctx = new Ctx();
-    const len = ctx.sampleRate * 0.25;
-    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (len / 8));
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    const g = ctx.createGain();
-    g.gain.value = 0.35;
-    src.connect(g).connect(ctx.destination);
-    src.start();
-    src.onended = () => ctx.close();
-  } catch {
-    /* sound is optional */
-  }
 }

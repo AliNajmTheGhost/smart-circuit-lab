@@ -167,6 +167,27 @@ export function symbolSvg(type: string, params: Record<string, ParamValue>, std:
     }
     case 'fuse':
       return `<rect class="bg" x="-16" y="-6" width="32" height="12" rx="2"/>` + L(-40, 0, 40, 0);
+    case 'speaker':
+      // Magnet and cone, with sound waves that show while it plays.
+      return (
+        L(-40, 0, -20, 0) +
+        L(40, 0, 20, 0) +
+        L(-20, 0, -20, 10) +
+        L(20, 0, 20, 10) +
+        L(-20, 10, -8, 10) +
+        L(20, 10, 8, 10) +
+        `<rect x="-8" y="-4" width="16" height="16" class="bg"/>` +
+        P('M-8 -4 L-16 -18 H16 L8 -4', ' class="bg"') +
+        `<g class="waves">${P('M-12 -22 Q0 -30 12 -22', ' fill="none"')}${P('M-18 -27 Q0 -38 18 -27', ' fill="none"')}</g>`
+      );
+    case 'buzzer':
+      return (
+        L(-40, 0, -14, 0) +
+        L(40, 0, 14, 0) +
+        P('M-14 8 V0 A14 14 0 0 1 14 0 V8 Z', ' class="bg"') +
+        T(-24, -6, '+') +
+        `<g class="waves">${P('M-10 -18 Q0 -24 10 -18', ' fill="none"')}${P('M-16 -23 Q0 -32 16 -23', ' fill="none"')}</g>`
+      );
     case 'lamp': {
       const glow = C(0, 0, 20, ' class="glow" fill="#ffd54a"');
       const body = C(0, 0, 14, ' class="bg lampglass"');

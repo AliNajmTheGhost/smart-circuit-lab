@@ -2196,3 +2196,169 @@ select {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Speaker and buzzer: waves pulse outwards while the part makes sound. */
+.part .waves {
+  opacity: 0;
+  stroke: var(--accent, #14b8a6);
+  transition: opacity 0.15s;
+}
+.part .waves.playing path {
+  animation: waves 0.6s ease-out infinite;
+}
+.part .waves.playing path:nth-child(2) {
+  animation-delay: 0.3s;
+}
+@keyframes waves {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.15;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .part .waves.playing path {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------- achievements */
+.badge-pop {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  z-index: 60;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink, inherit);
+  box-shadow: var(--shadow-2);
+  border: 1px solid var(--accent);
+  transform: translate(-50%, -140%);
+  transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+.badge-pop.show {
+  transform: translate(-50%, 0);
+}
+.badge-pop small {
+  color: var(--accent);
+  font-weight: 600;
+}
+.badge-pop strong {
+  display: block;
+  font-size: 1.05rem;
+}
+.badge-pop p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.badge-emoji {
+  font-size: 2.2rem;
+  line-height: 1;
+  flex: none;
+}
+.ach-stats {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 4px 0 10px;
+}
+.ach-stats div {
+  flex: 1 1 140px;
+  padding: 10px 12px;
+  border-radius: var(--radius-s);
+  background: var(--surface-2);
+}
+.ach-stats b {
+  font-size: 1.4rem;
+  margin-inline-end: 6px;
+}
+.ach-stats span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.ach-meter {
+  height: 8px;
+  border-radius: 99px;
+  background: var(--surface-3);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.ach-meter i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+}
+.badge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+.badge-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 10px;
+  border-radius: var(--radius-s);
+  background: var(--surface-2);
+  text-align: center;
+  opacity: 0.55;
+  filter: grayscale(1);
+}
+.badge-card.on {
+  opacity: 1;
+  filter: none;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.badge-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.badge-card small {
+  color: var(--accent);
+  font-size: 0.75rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .badge-pop {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------- repair challenges */
+.lesson.challenge::before {
+  background: linear-gradient(90deg, var(--warm), var(--bad));
+}
+.ctask {
+  display: flex;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--ink-2);
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 9px 11px;
+  margin: 0 0 10px;
+}
+.cwrong {
+  color: var(--bad);
+  font-size: 0.85rem;
+  margin: 8px 0 0;
+}
+.stars {
+  color: #f5b400;
+  letter-spacing: 1px;
+}
+.ico.tiny {
+  width: 13px;
+  height: 13px;
+  vertical-align: -2px;
+}

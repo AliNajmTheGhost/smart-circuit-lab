@@ -1,5 +1,6 @@
 import { EXAMPLES } from '../examples';
 import { getLang, nameOf, t } from '../i18n';
+import { openCircuitFile, onIncomingFile } from '../platform/files';
 import { fmt } from '../units';
 import { SPEEDS, type App, type Theme } from './app';
 import type { Board } from './board';
@@ -12,6 +13,10 @@ const THEME_ICON: Record<Theme, string> = { system: 'auto', light: 'sun', dark: 
 interface Hooks {
   openLessons(): void;
   openWelcome(): void;
+  openAchievements(): void;
+  openChallenges(): void;
+  /** An example was opened from the gallery. */
+  exampleOpened?(id: string): void;
   /** Rebuild every panel, e.g. after switching language. */
   rebuild(): void;
 }
@@ -41,6 +46,8 @@ export class Toolbar {
       <div class="tgroup">
         <button class="tbtn soft" data-act="examples">${icon('bulb')}<span class="lbl">${t('examples')}</span></button>
         <button class="tbtn accent" data-act="lessons">${icon('book')}<span class="lbl">${t('lessons')}</span></button>
+        <button class="tbtn soft" data-act="challenges" title="${t('challenges')}">${icon('wrench')}<span class="lbl">${t('challenges')}</span></button>
+        <button class="tbtn soft" data-act="achievements" title="${t('achievements')}">${icon('trophy')}<span class="lbl">${t('achievements')}</span></button>
       </div>
       <div class="tspacer"></div>
       <div class="tgroup">
@@ -52,22 +59,12 @@ export class Toolbar {
         <button class="tbtn" data-act="theme" title="${t('theme')}"></button>
         <button class="tbtn" data-act="lang" title="${t('language')}">${icon('globe')}<span class="lbl">${t('language')}</span></button>
         <button class="tbtn mobile-only" data-act="drawer-side" title="${t('props')}">${icon('props')}</button>
-      </div>
-      <input type="file" id="file-in" accept=".nabd,.json" hidden>`;
+      </div>`;
     tools.onclick = (e) => {
       const b = (e.target as Element).closest<HTMLElement>('button[data-act]');
       if (b) void this.act(b.dataset.act!, b);
     };
-    $<HTMLInputElement>('#file-in').onchange = async (e) => {
-      const input = e.target as HTMLInputElement;
-      const f = input.files?.[0];
-      input.value = '';
-      if (!f) return;
-      if (await this.app.importFile(f)) {
-        this.board.fit();
-        toast(t('opened'));
-      } else toast(t('badFile'), true);
-    };
+    void onIncomingFile((f) => void this.openText(f.text));
     $('.brand').onclick = () => this.hooks.openWelcome();
     this.buildDock();
     this.update();
@@ -136,6 +133,14 @@ export class Toolbar {
     if (el && el.textContent !== s) el.textContent = s;
   }
 
+  /** Load a circuit from file text, with a message either way. */
+  private async openText(text: string): Promise<void> {
+    if (await this.app.importText(text)) {
+      this.board.fit();
+      toast(t('opened'));
+    } else toast(t('badFile'), true);
+  }
+
   async act(a: string, btn: HTMLElement): Promise<void> {
     const app = this.app;
     switch (a) {
@@ -144,18 +149,25 @@ export class Toolbar {
         app.load({ version: 1, title: '', parts: [], wires: [] });
         this.board.fit();
         break;
-      case 'open':
-        $<HTMLInputElement>('#file-in').click();
+      case 'open': {
+        const f = await openCircuitFile();
+        if (f) await this.openText(f.text);
         break;
+      }
       case 'save':
-        app.exportFile();
-        toast(t('saved'));
+        if (await app.exportFile()) toast(t('saved'));
         break;
       case 'examples':
         this.examples();
         break;
       case 'lessons':
         this.hooks.openLessons();
+        break;
+      case 'challenges':
+        this.hooks.openChallenges();
+        break;
+      case 'achievements':
+        this.hooks.openAchievements();
         break;
       case 'undo':
         app.undo();
@@ -204,6 +216,7 @@ export class Toolbar {
         <div class="menu-head">${t('viewMenu')}</div>
         ${sw('showVolt', t('voltColors'), app.showVolt)}
         ${sw('showCurrent', t('currentDots'), app.showCurrent)}
+        ${sw('sound', t('soundOpt'), app.sound)}
         <div class="menu-head">${t('symbols')}</div>
         <div class="seg small">
           <button data-std="ansi" aria-checked="${app.std === 'ansi'}">ANSI · ${t('bookStd')}</button>
@@ -213,7 +226,7 @@ export class Toolbar {
       (el) => {
         el.addEventListener('change', (e) => {
           const i = e.target as HTMLInputElement;
-          if (i.dataset.opt === 'showVolt' || i.dataset.opt === 'showCurrent') app.setOption(i.dataset.opt, i.checked);
+          if (i.dataset.opt === 'showVolt' || i.dataset.opt === 'showCurrent' || i.dataset.opt === 'sound') app.setOption(i.dataset.opt, i.checked);
         });
         el.addEventListener('click', (e) => {
           const b = (e.target as Element).closest<HTMLElement>('[data-std]');
@@ -248,6 +261,7 @@ export class Toolbar {
           const b = (e.target as Element).closest<HTMLElement>('[data-ex]');
           if (!b) return;
           this.openExample(b.dataset.ex!);
+          this.hooks.exampleOpened?.(b.dataset.ex!);
           close();
         });
       },
