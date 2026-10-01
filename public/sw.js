@@ -1,6 +1,6 @@
 // Keeps Nabd working without internet: every file is served from the cache first,
 // and refreshed in the background whenever the network is available.
-const CACHE = 'nabd-v1';
+const CACHE = 'nabd-v2';
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();
@@ -26,7 +26,8 @@ self.addEventListener('fetch', (e) => {
           if (res.ok) cache.put(e.request, res.clone());
           return res;
         })
-        .catch(() => hit);
+        // Offline and not cached yet: a page request still gets the app shell.
+        .catch(() => hit || (e.request.mode === 'navigate' ? cache.match('./index.html') : undefined));
       return hit || fresh;
     }),
   );

@@ -80,6 +80,8 @@ export class Panels {
     const app = this.app;
     const ctrl = e.ctrlKey || e.metaKey;
     const k = e.key.toLowerCase();
+    // Space and Enter on a focused button press that button; they must not also run the shortcut.
+    if ((tag === 'BUTTON' || (e.target as HTMLElement).getAttribute('role') === 'radio') && (k === ' ' || k === 'enter')) return;
     if (ctrl && k === 'z') {
       e.preventDefault();
       if (e.shiftKey) app.redo();
