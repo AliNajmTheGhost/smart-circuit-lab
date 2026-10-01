@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EXAMPLES } from '../src/examples';
 import { coerceParam, defOf } from '../src/model/library';
-import { Engine } from '../src/sim/engine';
+import { Engine } from './engine';
 
 const param = (type: string, key: string) => defOf(type).params.find((p) => p.key === key)!;
 

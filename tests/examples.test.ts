@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { EXAMPLES } from '../src/examples';
-import { staticChecks } from '../src/sim/doctor';
-import { Engine } from '../src/sim/engine';
+import { checks } from './engine';
+import { Engine } from './engine';
 
 describe('examples', () => {
   for (const ex of EXAMPLES) {
     it(`${ex.id}: every pin is wired and it simulates cleanly`, () => {
       const doc = ex.build();
       const e = new Engine(doc);
-      const notes = staticChecks(doc, e.net).filter((n) => n.level !== 'info');
+      const notes = checks(doc, e).filter((n) => n.level !== 'info');
       expect(notes.map((n) => `${n.key} ${doc.parts.find((p) => p.id === n.parts[0])?.label}`)).toEqual([]);
       for (let i = 0; i < 3000; i++) {
         const damaged = e.step();

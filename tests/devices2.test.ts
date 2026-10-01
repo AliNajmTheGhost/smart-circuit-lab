@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Builder } from '../src/model/docops';
 import type { ParamValue } from '../src/model/types';
-import { Engine } from '../src/sim/engine';
+import { Engine } from './engine';
 
 type Item = [type: string, params?: Record<string, ParamValue>, rot?: number];
 const P = (x: number, y: number) => ({ x, y });

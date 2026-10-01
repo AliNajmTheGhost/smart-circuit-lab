@@ -4,7 +4,7 @@ import { Builder } from '../src/model/docops';
 import { makePart } from '../src/model/docops';
 import { emptyDoc, type CircuitDoc } from '../src/model/types';
 import { traceCurves } from '../src/sim/curves';
-import { Engine } from '../src/sim/engine';
+import { Engine } from './engine';
 
 const P = (x: number, y: number) => ({ x, y });
 const example = (id: string) => EXAMPLES.find((e) => e.id === id)!.build();

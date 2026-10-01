@@ -1,7 +1,7 @@
 import { getLang, nameOf, t } from '../i18n';
 import { coerceParam, defOf, type ParamDef } from '../model/library';
 import { keyOf, type Part } from '../model/types';
-import { canTrace } from '../sim/curves';
+import { canTrace } from '../sim/wasm/engine';
 import { fmt, fmtShort, parseValue, prefixesFor, splitValue } from '../units';
 import type { App } from './app';
 import { multimeterText, type Board } from './board';

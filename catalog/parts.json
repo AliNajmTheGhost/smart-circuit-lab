@@ -1,0 +1,1488 @@
+{
+ "version": 1,
+ "parts": [
+  {
+   "type": "battery",
+   "pins": [
+    {
+     "x": 0,
+     "y": -40
+    },
+    {
+     "x": 0,
+     "y": 40
+    }
+   ],
+   "params": [
+    {
+     "key": "V",
+     "def": 9
+    },
+    {
+     "key": "r",
+     "def": 0.1
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "psu",
+   "pins": [
+    {
+     "x": 0,
+     "y": -40
+    },
+    {
+     "x": 0,
+     "y": 40
+    }
+   ],
+   "params": [
+    {
+     "key": "V",
+     "def": 12
+    },
+    {
+     "key": "Ilim",
+     "def": 1
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "ac",
+   "pins": [
+    {
+     "x": 0,
+     "y": -40
+    },
+    {
+     "x": 0,
+     "y": 40
+    }
+   ],
+   "params": [
+    {
+     "key": "Vp",
+     "def": 12
+    },
+    {
+     "key": "f",
+     "def": 50
+    },
+    {
+     "key": "r",
+     "def": 0.1
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "funcgen",
+   "pins": [
+    {
+     "x": 0,
+     "y": -40
+    },
+    {
+     "x": 0,
+     "y": 40
+    }
+   ],
+   "params": [
+    {
+     "key": "wave",
+     "def": "sine"
+    },
+    {
+     "key": "Vp",
+     "def": 2
+    },
+    {
+     "key": "f",
+     "def": 100
+    },
+    {
+     "key": "duty",
+     "def": 0.5
+    },
+    {
+     "key": "fm",
+     "def": 100
+    },
+    {
+     "key": "m",
+     "def": 0.5
+    },
+    {
+     "key": "dev",
+     "def": 50
+    },
+    {
+     "key": "offset",
+     "def": 0
+    },
+    {
+     "key": "r",
+     "def": 50
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "ground",
+   "pins": [
+    {
+     "x": 0,
+     "y": 0
+    }
+   ],
+   "params": [],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "resistor",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "R",
+     "def": 1000
+    },
+    {
+     "key": "Pmax",
+     "def": 0.25
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "pot",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    },
+    {
+     "x": 0,
+     "y": -40
+    }
+   ],
+   "params": [
+    {
+     "key": "R",
+     "def": 10000
+    },
+    {
+     "key": "pos",
+     "def": 0.5
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "capacitor",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "C",
+     "def": 0.00001
+    },
+    {
+     "key": "Vmax",
+     "def": 50
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "ecap",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "C",
+     "def": 0.0001
+    },
+    {
+     "key": "Vmax",
+     "def": 25
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "inductor",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "L",
+     "def": 0.01
+    },
+    {
+     "key": "Rs",
+     "def": 1
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "ldr",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "light",
+     "def": 0.5
+    },
+    {
+     "key": "Rdark",
+     "def": 1000000
+    },
+    {
+     "key": "Rlight",
+     "def": 500
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "transformer",
+   "pins": [
+    {
+     "x": -40,
+     "y": -40
+    },
+    {
+     "x": -40,
+     "y": 40
+    },
+    {
+     "x": 40,
+     "y": -40
+    },
+    {
+     "x": 40,
+     "y": 40
+    }
+   ],
+   "params": [
+    {
+     "key": "n",
+     "def": 10
+    },
+    {
+     "key": "L1",
+     "def": 10
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "switch",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "closed",
+     "def": 0
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "button",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "fuse",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "I",
+     "def": 1
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "diode",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "Imax",
+     "def": 1
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "zener",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "Vz",
+     "def": 5.1
+    },
+    {
+     "key": "Pmax",
+     "def": 0.5
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "schottky",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "Imax",
+     "def": 1
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "led",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "color",
+     "def": "red"
+    },
+    {
+     "key": "Imax",
+     "def": 0.02
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "photodiode",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "light",
+     "def": 0.5
+    },
+    {
+     "key": "Isc",
+     "def": 0.0001
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "scr",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    },
+    {
+     "x": 20,
+     "y": 40
+    }
+   ],
+   "params": [
+    {
+     "key": "Igt",
+     "def": 0.001
+    },
+    {
+     "key": "Ih",
+     "def": 0.005
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "triac",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    },
+    {
+     "x": 20,
+     "y": 40
+    }
+   ],
+   "params": [
+    {
+     "key": "Igt",
+     "def": 0.005
+    },
+    {
+     "key": "Ih",
+     "def": 0.01
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "npn",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 20,
+     "y": -40
+    },
+    {
+     "x": 20,
+     "y": 40
+    }
+   ],
+   "params": [
+    {
+     "key": "beta",
+     "def": 100
+    },
+    {
+     "key": "Pmax",
+     "def": 0.5
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "pnp",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 20,
+     "y": -40
+    },
+    {
+     "x": 20,
+     "y": 40
+    }
+   ],
+   "params": [
+    {
+     "key": "beta",
+     "def": 100
+    },
+    {
+     "key": "Pmax",
+     "def": 0.5
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "nmos",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 20,
+     "y": -40
+    },
+    {
+     "x": 20,
+     "y": 40
+    }
+   ],
+   "params": [
+    {
+     "key": "Vth",
+     "def": 2
+    },
+    {
+     "key": "K",
+     "def": 0.1
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "pmos",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 20,
+     "y": -40
+    },
+    {
+     "x": 20,
+     "y": 40
+    }
+   ],
+   "params": [
+    {
+     "key": "Vth",
+     "def": 2
+    },
+    {
+     "key": "K",
+     "def": 0.1
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "lamp",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "V",
+     "def": 12
+    },
+    {
+     "key": "P",
+     "def": 5
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "sevenseg",
+   "pins": [
+    {
+     "x": -40,
+     "y": -60
+    },
+    {
+     "x": -40,
+     "y": -40
+    },
+    {
+     "x": -40,
+     "y": -20
+    },
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": -40,
+     "y": 20
+    },
+    {
+     "x": -40,
+     "y": 40
+    },
+    {
+     "x": -40,
+     "y": 60
+    },
+    {
+     "x": 0,
+     "y": 100
+    }
+   ],
+   "params": [
+    {
+     "key": "color",
+     "def": "red"
+    },
+    {
+     "key": "Rs",
+     "def": 330
+    }
+   ],
+   "optional": [],
+   "internalNodes": 7
+  },
+  {
+   "type": "lcd7",
+   "pins": [
+    {
+     "x": -40,
+     "y": -60
+    },
+    {
+     "x": -40,
+     "y": -40
+    },
+    {
+     "x": -40,
+     "y": -20
+    },
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": -40,
+     "y": 20
+    },
+    {
+     "x": -40,
+     "y": 40
+    },
+    {
+     "x": -40,
+     "y": 60
+    },
+    {
+     "x": 0,
+     "y": 100
+    }
+   ],
+   "params": [],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "irtx",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "ch",
+     "def": "1"
+    },
+    {
+     "key": "Imax",
+     "def": 0.05
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "irrx",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "ch",
+     "def": "1"
+    },
+    {
+     "key": "path",
+     "def": "open"
+    },
+    {
+     "key": "Isc",
+     "def": 0.0002
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "and",
+   "pins": [
+    {
+     "x": -40,
+     "y": -20
+    },
+    {
+     "x": -40,
+     "y": 20
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "or",
+   "pins": [
+    {
+     "x": -40,
+     "y": -20
+    },
+    {
+     "x": -40,
+     "y": 20
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "not",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "nand",
+   "pins": [
+    {
+     "x": -40,
+     "y": -20
+    },
+    {
+     "x": -40,
+     "y": 20
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "nor",
+   "pins": [
+    {
+     "x": -40,
+     "y": -20
+    },
+    {
+     "x": -40,
+     "y": 20
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "xor",
+   "pins": [
+    {
+     "x": -40,
+     "y": -20
+    },
+    {
+     "x": -40,
+     "y": 20
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "xnor",
+   "pins": [
+    {
+     "x": -40,
+     "y": -20
+    },
+    {
+     "x": -40,
+     "y": 20
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "logicin",
+   "pins": [
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "state",
+     "def": 0
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "logicout",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    }
+   ],
+   "params": [],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "timer555",
+   "pins": [
+    {
+     "x": -20,
+     "y": -80
+    },
+    {
+     "x": 20,
+     "y": -80
+    },
+    {
+     "x": -60,
+     "y": -40
+    },
+    {
+     "x": -60,
+     "y": 0
+    },
+    {
+     "x": -60,
+     "y": 40
+    },
+    {
+     "x": 0,
+     "y": 80
+    },
+    {
+     "x": 60,
+     "y": 0
+    },
+    {
+     "x": 60,
+     "y": 40
+    }
+   ],
+   "params": [],
+   "optional": [
+    1,
+    7
+   ],
+   "internalNodes": 0
+  },
+  {
+   "type": "aswitch",
+   "pins": [
+    {
+     "x": 40,
+     "y": 0
+    },
+    {
+     "x": -40,
+     "y": -20
+    },
+    {
+     "x": -40,
+     "y": 20
+    },
+    {
+     "x": 0,
+     "y": 40
+    }
+   ],
+   "params": [
+    {
+     "key": "Ron",
+     "def": 50
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "dff",
+   "pins": [
+    {
+     "x": -40,
+     "y": -20
+    },
+    {
+     "x": -40,
+     "y": 20
+    },
+    {
+     "x": 40,
+     "y": -20
+    },
+    {
+     "x": 40,
+     "y": 20
+    }
+   ],
+   "params": [],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "jkff",
+   "pins": [
+    {
+     "x": -40,
+     "y": -20
+    },
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": -40,
+     "y": 20
+    },
+    {
+     "x": 40,
+     "y": -20
+    },
+    {
+     "x": 40,
+     "y": 20
+    }
+   ],
+   "params": [],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "counter",
+   "pins": [
+    {
+     "x": -60,
+     "y": -40
+    },
+    {
+     "x": -60,
+     "y": 40
+    },
+    {
+     "x": 60,
+     "y": -40
+    },
+    {
+     "x": 60,
+     "y": -20
+    },
+    {
+     "x": 60,
+     "y": 0
+    },
+    {
+     "x": 60,
+     "y": 20
+    }
+   ],
+   "params": [
+    {
+     "key": "mod",
+     "def": "10"
+    }
+   ],
+   "optional": [
+    1
+   ],
+   "internalNodes": 0
+  },
+  {
+   "type": "bcd7",
+   "pins": [
+    {
+     "x": -60,
+     "y": -40
+    },
+    {
+     "x": -60,
+     "y": -20
+    },
+    {
+     "x": -60,
+     "y": 0
+    },
+    {
+     "x": -60,
+     "y": 20
+    },
+    {
+     "x": 60,
+     "y": -60
+    },
+    {
+     "x": 60,
+     "y": -40
+    },
+    {
+     "x": 60,
+     "y": -20
+    },
+    {
+     "x": 60,
+     "y": 0
+    },
+    {
+     "x": 60,
+     "y": 20
+    },
+    {
+     "x": 60,
+     "y": 40
+    },
+    {
+     "x": 60,
+     "y": 60
+    }
+   ],
+   "params": [],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "opamp",
+   "pins": [
+    {
+     "x": -40,
+     "y": -20
+    },
+    {
+     "x": -40,
+     "y": 20
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "Vsat",
+     "def": 13
+    },
+    {
+     "key": "A",
+     "def": 100000
+    },
+    {
+     "key": "GBW",
+     "def": 1000000
+    },
+    {
+     "key": "Vos",
+     "def": 0.001
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "adc",
+   "pins": [
+    {
+     "x": -60,
+     "y": -20
+    },
+    {
+     "x": -60,
+     "y": 20
+    },
+    {
+     "x": 60,
+     "y": -40
+    },
+    {
+     "x": 60,
+     "y": -20
+    },
+    {
+     "x": 60,
+     "y": 0
+    },
+    {
+     "x": 60,
+     "y": 20
+    }
+   ],
+   "params": [
+    {
+     "key": "Vref",
+     "def": 5
+    }
+   ],
+   "optional": [
+    1
+   ],
+   "internalNodes": 0
+  },
+  {
+   "type": "dac",
+   "pins": [
+    {
+     "x": -60,
+     "y": -40
+    },
+    {
+     "x": -60,
+     "y": -20
+    },
+    {
+     "x": -60,
+     "y": 0
+    },
+    {
+     "x": -60,
+     "y": 20
+    },
+    {
+     "x": 60,
+     "y": -20
+    }
+   ],
+   "params": [
+    {
+     "key": "Vref",
+     "def": 5
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "tline",
+   "pins": [
+    {
+     "x": -60,
+     "y": -20
+    },
+    {
+     "x": -60,
+     "y": 20
+    },
+    {
+     "x": 60,
+     "y": -20
+    },
+    {
+     "x": 60,
+     "y": 20
+    }
+   ],
+   "params": [
+    {
+     "key": "Z0",
+     "def": 75
+    },
+    {
+     "key": "Td",
+     "def": 0.0001
+    },
+    {
+     "key": "loss",
+     "def": 0
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "multimeter",
+   "pins": [
+    {
+     "x": 20,
+     "y": 60
+    },
+    {
+     "x": -20,
+     "y": 60
+    }
+   ],
+   "params": [
+    {
+     "key": "mode",
+     "def": "vdc"
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "bode",
+   "pins": [
+    {
+     "x": -20,
+     "y": 40
+    },
+    {
+     "x": 20,
+     "y": 40
+    }
+   ],
+   "params": [
+    {
+     "key": "fmin",
+     "def": 1
+    },
+    {
+     "key": "fmax",
+     "def": 100000
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "voltmeter",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "mode",
+     "def": "dc"
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "ammeter",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "mode",
+     "def": "dc"
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
+   "type": "probe",
+   "pins": [
+    {
+     "x": 0,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "ch",
+     "def": "1"
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  }
+ ]
+}

@@ -9,6 +9,7 @@ import '@fontsource/readex-pro/600.css';
 import '@fontsource/readex-pro/700.css';
 import './styles.css';
 import { EXAMPLES } from './examples';
+import { loadCore } from './sim/wasm/load';
 import { App } from './ui/app';
 import { Board } from './ui/board';
 import { Panels } from './ui/panels';
@@ -26,7 +27,8 @@ const started = runSplash([
   ['splashFonts', fontsReady],
   [
     'splashEngine',
-    () => {
+    async () => {
+      await loadCore();
       app = new App();
       board = new Board(app, document.getElementById('stage')!);
     },

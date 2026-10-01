@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { LESSONS, type LessonCtx } from '../src/lessons/lessons';
 import type { CircuitDoc } from '../src/model/types';
-import { staticChecks } from '../src/sim/doctor';
-import { Engine } from '../src/sim/engine';
+import { checks } from './engine';
+import { Engine } from './engine';
 
 /** A lesson context backed by a bare engine, as the app would build it. */
 function ctx(doc: CircuitDoc, e: Engine, broken: Set<string>, scopeOpen = false): LessonCtx {
@@ -27,7 +27,7 @@ describe('lessons', () => {
     it(`${l.id}: starting circuit is wired`, () => {
       const doc = l.build();
       const e = new Engine(doc);
-      const notes = staticChecks(doc, e.net).filter((n) => n.level !== 'info');
+      const notes = checks(doc, e).filter((n) => n.level !== 'info');
       expect(notes.map((n) => n.key)).toEqual([]);
     });
   }

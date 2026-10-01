@@ -2,8 +2,9 @@ import { getLang, message, setLang, t, type Lang } from '../i18n';
 import { cloneDoc, normalizeWires, topologyKey } from '../model/docops';
 import { defOf } from '../model/library';
 import { emptyDoc, type CircuitDoc, type Part } from '../model/types';
-import { staticChecks, type DoctorNote } from '../sim/doctor';
-import { Engine, type PartIssue } from '../sim/engine';
+import type { DoctorNote } from '../sim/doctor';
+import type { PartIssue } from '../sim/engine';
+import { WasmEngine as Engine } from '../sim/wasm/engine';
 import type { SymbolStd } from './symbols';
 
 export type Selection = { kind: 'part' | 'wire'; id: string } | null;
@@ -24,6 +25,8 @@ export const SPEEDS = [
 const STORE_DOC = 'nabd.doc';
 const STORE_SETTINGS = 'nabd.settings';
 const FRAME_BUDGET_MS = 10;
+/** Steps per call into the simulation core; small enough to keep the frame budget. */
+const BATCH = 200;
 const MAX_HISTORY = 200;
 
 export class App {
@@ -43,7 +46,7 @@ export class App {
   /** Damaged parts stay damaged until the student replaces them. */
   broken = new Map<string, PartIssue>();
   notes: Note[] = [];
-  /** Called after each simulated step, for the oscilloscope. */
+  /** Called after each batch of simulated steps, for the oscilloscope. */
   stepHooks: ((e: Engine) => void)[] = [];
 
   private undoStack: string[] = [];
@@ -246,12 +249,13 @@ export class App {
       const state = this.engine?.exportState();
       const t0 = this.engine?.t ?? 0;
       this.topo = key;
+      this.engine?.dispose();
       this.engine = new Engine(this.doc, dt, new Set(this.broken.keys()));
       if (state) this.engine.importState(state, t0);
     } else {
       this.engine.syncParts(this.doc);
     }
-    this.staticNotes = staticChecks(this.doc, this.engine.net);
+    this.staticNotes = this.engine.staticChecks();
     this.refreshNotes();
   }
 
@@ -264,6 +268,7 @@ export class App {
   restart(): void {
     this.broken.clear();
     const dt = this.chooseDt();
+    this.engine?.dispose();
     this.engine = new Engine(this.doc, dt);
     this.topo = `${topologyKey(this.doc)}|${dt}`;
     this.stepDebt = 0;
@@ -284,9 +289,11 @@ export class App {
       this.stepDebt += (dtReal * SPEEDS[this.speed].simPerSec) / this.engine.dt;
       const start = performance.now();
       let newDamage = false;
+      // Steps run in batches: one call into the core per batch instead of per step.
       while (this.stepDebt >= 1) {
-        const damaged = this.engine.step();
-        this.stepDebt -= 1;
+        const k = Math.min(Math.floor(this.stepDebt), BATCH);
+        const damaged = this.engine.run(k);
+        this.stepDebt -= k;
         for (const d of damaged) {
           this.broken.set(d.part, d);
           newDamage = true;

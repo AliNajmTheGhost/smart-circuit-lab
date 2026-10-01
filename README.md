@@ -4,7 +4,12 @@
 
 ## التشغيل
 
-يحتاج [Node.js](https://nodejs.org) الإصدار 20 أو أحدث.
+يحتاج [Node.js](https://nodejs.org) الإصدار 20 أو أحدث، و[Rust](https://rustup.rs) مع هدف WebAssembly وأداة wasm-bindgen:
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.129 --locked
+```
 
 ```bash
 npm install
@@ -16,7 +21,11 @@ npm run dev
 | الأمر | الوظيفة |
 |---|---|
 | `npm run dev` | تشغيل البرنامج أثناء التطوير |
-| `npm test` | اختبارات دقة المحاكاة والأمثلة |
+| `npm test` | كل الاختبارات: الواجهة على محرك Rust، ثم اختبارات المحرك نفسه |
+| `npm run test:ts-engine` | نفس اختبارات الواجهة على المحرك القديم (TypeScript) للمقارنة |
+| `npm run bench` | مقارنة سرعة المحرك القديم والجديد |
+| `npm run golden` | إعادة تسجيل النتائج المرجعية من المحرك القديم |
+| `npm run catalog` | تحديث `catalog/parts.json` بعد تعديل مكتبة القطع |
 | `npm run build` | تطبيق ويب يعمل بدون إنترنت ويثبت على الهاتف، في مجلد `dist/` |
 | `npm run build:single` | ملف واحد `dist-single/nabd.html` يفتح بالنقر المزدوج بدون إنترنت ولا تثبيت |
 
@@ -34,10 +43,27 @@ npm run dev
 
 ## بنية المشروع
 
+محرك المحاكاة مكتوب بلغة Rust ويعمل في المتصفح عبر WebAssembly، أسرع من المحرك القديم بمرتين إلى أربع مرات. نتائجه تطابق المحرك القديم في 48 دائرة مرجعية بفرق لا يتجاوز 10⁻¹³ من المدى.
+
 ```
+crates/core/       محرك المحاكاة (Rust، بلا واجهة)
+├── src/doc.rs        شكل ملف الدائرة
+├── src/catalog.rs    أطراف القطع وقيمها (من catalog/parts.json)
+├── src/netlist.rs    تحويل الرسم إلى عقد كهربائية
+├── src/stamp.rs      بناء المعادلات
+├── src/linalg/       حل المعادلات (LU مع إعادة الاستخدام، والأعداد المركبة)
+├── src/devices/      نموذج كل عائلة قطع في ملف خاص
+├── src/engine.rs     الحل الزمني بطريقة نيوتن-رافسون
+├── src/trace.rs      تشغيل دفعة خطوات مع تسجيل راسم الإشارة
+├── src/doctor.rs     فحوص «طبيب الدائرة»
+├── src/curves.rs     منحني الخواص
+└── tests/golden.rs   مقارنة بنتائج المحرك القديم (tests/golden/*.json)
+crates/wasm/       ربط المحرك بالمتصفح
+catalog/parts.json  بيانات القطع المشتركة بين الواجهة والمحرك
 src/
 ├── model/     الدائرة: أنواع البيانات، مكتبة القطع، عمليات التحرير
-├── sim/       محرك المحاكاة (لا يعتمد على الواجهة)
+├── sim/wasm/  تحميل محرك Rust وواجهته (WasmEngine)
+├── sim/       المحرك القديم بلغة TypeScript، مرجع للمقارنة فقط
 │   ├── netlist.ts   تحويل الرسم إلى عقد كهربائية
 │   ├── stamper.ts   بناء المعادلات G·v = i وحلها
 │   ├── devices.ts   نماذج القطع (مقاومة، ثنائي، ترانزستور، بوابات…)
@@ -53,7 +79,7 @@ docs/curriculum.md  خريطة تمارين الكتب وما يغطيه الب�
 
 ## إضافة قطعة جديدة
 
-1. أضف تعريفها في `src/model/library.ts` (الاسم، الأطراف، الخصائص).
+1. أضف تعريفها في `src/model/library.ts` (الاسم، الأطراف، الخصائص)، ثم `npm run catalog`.
 2. ارسم رمزها في `src/ui/symbols.ts`.
-3. اكتب نموذجها الكهربائي في `src/sim/devices.ts` وأضفه إلى `createDevice`.
-4. أضف اختباراً في `tests/sim.test.ts`.
+3. اكتب نموذجها الكهربائي في ملف من `crates/core/src/devices/` وأضفه إلى `create` في `devices/mod.rs`.
+4. أضف اختباراً في `tests/` أو في `crates/core`.

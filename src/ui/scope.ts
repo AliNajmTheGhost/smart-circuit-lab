@@ -1,8 +1,7 @@
 import { nameOf, t } from '../i18n';
 import { defOf } from '../model/library';
 import type { Part } from '../model/types';
-import { canTrace, traceCurves, type IvPlot } from '../sim/curves';
-import type { Engine } from '../sim/engine';
+import { canTrace, partCurves, type IvPlot, type WasmEngine as Engine } from '../sim/wasm/engine';
 import { fmt } from '../units';
 import type { App } from './app';
 import { $, icon } from './dom';
@@ -108,6 +107,9 @@ export class Scope {
   private lastT = -1;
   private has = [false, false];
   private probes: (string | null)[] = [null, null];
+  /** The engine and settings the core is currently recording for. */
+  private watched: Engine | null = null;
+  private watchKey = '';
 
   // Front panel.
   timeDiv = 2e-3;
@@ -399,7 +401,7 @@ export class Scope {
 
   showIv(part: Part): void {
     if (!canTrace(part.type)) return;
-    this.iv = { part, plot: traceCurves(part) };
+    this.iv = { part, plot: partCurves(part) };
     this.tab = 'iv';
     this.app.setOption('scopeOpen', true);
     this.build();
@@ -412,20 +414,31 @@ export class Scope {
 
   // ------------------------------------------------------------ acquisition
 
+  /**
+   * The core records the two probe voltages while it runs (500 samples per screen width);
+   * after each batch the samples are copied into the scope's memory.
+   */
   private sample(e: Engine): void {
-    if (!this.app.scopeOpen || !this.running) return;
-    if (e.t < this.lastT) this.clear();
-    if (this.lastT >= 0 && e.t - this.lastT < (this.timeDiv * HDIV) / PER_SCREEN) return;
-    this.lastT = e.t;
-    this.tBuf[this.head] = e.t;
-    for (let c = 0; c < 2; c++) {
-      const id = this.probes[c];
-      const d = id ? e.byId.get(id) : undefined;
-      this.has[c] = !!d;
-      this.vBuf[c][this.head] = d ? e.volt(d.nodes[0]) : 0;
+    const nodes = this.probes.map((id) => (id ? e.byId.get(id)?.nodes[0] : undefined));
+    const key = `${nodes.join()}|${this.timeDiv}`;
+    if (e !== this.watched || key !== this.watchKey) {
+      e.watch(nodes.map((n) => n ?? -1), (this.timeDiv * HDIV) / PER_SCREEN);
+      this.watched = e;
+      this.watchKey = key;
     }
-    this.head = (this.head + 1) % HISTORY;
-    this.count = Math.min(this.count + 1, HISTORY);
+    const { t, v } = e.takeTrace();
+    if (!this.app.scopeOpen || !this.running) return;
+    this.has = nodes.map((n) => n !== undefined);
+    if (e.t < this.lastT) this.clear();
+    for (let k = 0; k < t.length; k++) {
+      if (t[k] < this.lastT) this.clear();
+      this.lastT = t[k];
+      this.tBuf[this.head] = t[k];
+      this.vBuf[0][this.head] = v[2 * k];
+      this.vBuf[1][this.head] = v[2 * k + 1];
+      this.head = (this.head + 1) % HISTORY;
+      this.count = Math.min(this.count + 1, HISTORY);
+    }
   }
 
   private idx(k: number): number {

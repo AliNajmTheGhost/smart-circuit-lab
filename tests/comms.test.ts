@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EXAMPLES } from '../src/examples';
 import type { CircuitDoc } from '../src/model/types';
-import { Engine } from '../src/sim/engine';
+import { Engine } from './engine';
 
 const example = (id: string) => EXAMPLES.find((e) => e.id === id)!.build();
 const part = (doc: CircuitDoc, type: string, nth = 0) => doc.parts.filter((p) => p.type === type)[nth];

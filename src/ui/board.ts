@@ -805,7 +805,8 @@ export class Board {
 
     // Voltage colours.
     let vmax = 1;
-    for (let i = 0; i < e.n; i++) vmax = Math.max(vmax, Math.abs(e.x[i]));
+    const x = e.x;
+    for (let i = 0; i < x.length; i++) vmax = Math.max(vmax, Math.abs(x[i]));
     const hot: [number, number, number] = [224, 83, 61];
     const cold: [number, number, number] = [59, 125, 216];
     const colorFor = (v: number): string => {

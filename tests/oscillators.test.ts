@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EXAMPLES } from '../src/examples';
 import { Builder } from '../src/model/docops';
-import { Engine } from '../src/sim/engine';
+import { Engine } from './engine';
 
 const P = (x: number, y: number) => ({ x, y });
 
@@ -16,10 +16,7 @@ describe('energy-storing parts', () => {
     b.path(P(140, -40), P(140, 40), P(0, 40));
     const doc = b.done();
     const e = new Engine(doc, 1e-6);
-    const dev = e.byId.get(c)! as unknown as { vPrev: number; vPrev2: number; hist: number };
-    dev.vPrev = 5;
-    dev.vPrev2 = 5;
-    dev.hist = 1;
+    e.importState(new Map([[c, [5, 5, 1]]]), 0);
     // f = 1 / (2π√LC) ≈ 1.59 kHz, so 10 cycles ≈ 6.3 ms.
     let last = 0;
     for (let i = 0; i < 6300; i++) {
