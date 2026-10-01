@@ -9,6 +9,7 @@ import '@fontsource/readex-pro/600.css';
 import '@fontsource/readex-pro/700.css';
 import './styles.css';
 import { EXAMPLES } from './examples';
+import { isApp } from './platform';
 import { loadCore } from './sim/wasm/load';
 import { App } from './ui/app';
 import { Board } from './ui/board';
@@ -62,9 +63,16 @@ try {
   document.getElementById('stage')!.innerHTML = `<div class="start-error"><h2>تعذّر تشغيل نبض</h2><p>أعد تحميل الصفحة. إذا تكررت المشكلة فامسح بيانات الموقع من إعدادات المتصفح.</p><pre dir="ltr">${String(err).replace(/[<&]/g, '')}</pre></div>`;
 }
 
-// Installable, offline-capable app when served over http(s); the single-file build skips this.
-if (import.meta.env.PROD && import.meta.env.MODE !== 'single' && 'serviceWorker' in navigator && location.protocol.startsWith('http')) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {
-    /* offline support is optional */
-  });
+// Installable, offline-capable web app when served over http(s). The single-file build and the
+// installed app (whose files are already on the device) do without it; an old worker left in the
+// app by an earlier version is removed so it cannot keep serving the old page.
+if ('serviceWorker' in navigator) {
+  if (isApp()) {
+    void navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => void r.unregister()));
+    if ('caches' in window) void caches.keys().then((keys) => keys.forEach((k) => void caches.delete(k)));
+  } else if (import.meta.env.PROD && import.meta.env.MODE !== 'single' && location.protocol.startsWith('http')) {
+    navigator.serviceWorker.register('./sw.js').catch(() => {
+      /* offline support is optional */
+    });
+  }
 }

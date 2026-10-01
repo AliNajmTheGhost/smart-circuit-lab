@@ -2362,3 +2362,39 @@ select {
   height: 13px;
   vertical-align: -2px;
 }
+
+/* ---------------------------------------------------------------- first-time tour */
+.tour-spot {
+  position: fixed;
+  z-index: 70;
+  border-radius: 14px;
+  box-shadow: 0 0 0 9999px rgba(7, 11, 20, 0.62), 0 0 0 3px var(--accent);
+  pointer-events: none;
+}
+.tour-tip {
+  position: fixed;
+  z-index: 71;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-2);
+}
+.tour-tip small {
+  color: var(--accent);
+  font-weight: 600;
+}
+.tour-tip strong {
+  display: block;
+  font-family: var(--display);
+  font-size: 1.05rem;
+  margin: 2px 0 4px;
+}
+.tour-tip p {
+  margin: 0 0 12px;
+  line-height: 1.7;
+  font-size: 0.9rem;
+}
+.w-tour {
+  margin: 4px auto 0;
+}

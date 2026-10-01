@@ -10,6 +10,7 @@ import { ProgressWatcher } from '../progress/watcher';
 import { badgePopup, showAchievements } from './achievements';
 import { ChallengeRunner } from './challenge';
 import { Sound } from './sound';
+import { startTour, tourDone } from './tour';
 import { Toolbar } from './toolbar';
 import { showWelcome } from './welcome';
 
@@ -96,7 +97,23 @@ export class Panels {
       resume: this.restored ? () => this.board.fit() : undefined,
       examples: () => this.toolbar.examples(),
       lessons: () => this.lesson.chooser(),
+      tour: () => startTour(),
     });
+    if (!tourDone()) this.tourAfterDialogs();
+  }
+
+  /** The very first time, start the tour once the welcome (and whatever it opened) has closed. */
+  private tourAfterDialogs(): void {
+    const wrap = document.getElementById('modal');
+    if (!wrap) return;
+    const obs = new MutationObserver(() => {
+      if (!wrap.hidden) return;
+      obs.disconnect();
+      setTimeout(() => {
+        if (wrap.hidden && !tourDone()) startTour();
+      }, 400);
+    });
+    obs.observe(wrap, { attributes: true, attributeFilter: ['hidden'] });
   }
 
   private rebuild(): void {

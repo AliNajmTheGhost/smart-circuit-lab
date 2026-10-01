@@ -12,6 +12,7 @@ export interface WelcomeActions {
   resume?: () => void;
   examples(): void;
   lessons(): void;
+  tour(): void;
 }
 
 export function welcomeSkipped(): boolean {
@@ -58,6 +59,7 @@ export function showWelcome(actions: WelcomeActions): void {
         <span><b>${LESSONS.length}</b>${t('statLessons')}</span>
         <span><b>3</b>${t('statGrades')}</span>
       </div>
+      <button class="link w-tour" data-w="tour">${icon('eye')}${t('tourStart')}</button>
       <label class="w-skip"><input type="checkbox" data-skip${skip ? ' checked' : ''}><span>${t('wSkip')}</span></label>
     </div>`,
     (el, close) => {
@@ -78,6 +80,7 @@ export function showWelcome(actions: WelcomeActions): void {
         if (id === 'lessons') actions.lessons();
         if (id === 'examples') actions.examples();
         if (id === 'new') actions.newCircuit();
+        if (id === 'tour') actions.tour();
       });
     },
     'welcome-card',

@@ -1,6 +1,8 @@
-// Keeps Nabd working without internet: every file is served from the cache first,
-// and refreshed in the background whenever the network is available.
-const CACHE = 'nabd-v2';
+// Keeps Nabd working without internet when it is used as a web app.
+// The page itself is fetched fresh when online (so an update is never stuck behind an old page)
+// and comes from the cache when offline. Other files have hashed names that never change,
+// so they are served from the cache first.
+const CACHE = 'nabd-v3';
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();
@@ -17,18 +19,18 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET' || !e.request.url.startsWith(self.location.origin)) return;
+  const req = e.request;
+  if (req.method !== 'GET' || !req.url.startsWith(self.location.origin)) return;
+  const page = req.mode === 'navigate';
   e.respondWith(
     caches.open(CACHE).then(async (cache) => {
-      const hit = await cache.match(e.request, { ignoreSearch: true });
-      const fresh = fetch(e.request)
-        .then((res) => {
-          if (res.ok) cache.put(e.request, res.clone());
-          return res;
-        })
-        // Offline and not cached yet: a page request still gets the app shell.
-        .catch(() => hit || (e.request.mode === 'navigate' ? cache.match('./index.html') : undefined));
-      return hit || fresh;
+      const fresh = fetch(req).then((res) => {
+        if (res.ok) cache.put(req, res.clone());
+        return res;
+      });
+      if (page) return fresh.catch(async () => (await cache.match(req, { ignoreSearch: true })) ?? cache.match('./index.html'));
+      const hit = await cache.match(req, { ignoreSearch: true });
+      return hit ?? fresh;
     }),
   );
 });

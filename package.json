@@ -15,7 +15,9 @@
     "golden": "tsx scripts/make-golden.ts",
     "catalog": "tsx scripts/export-catalog.ts",
     "typecheck": "tsc --noEmit",
-    "build:single": "npm run build:wasm && tsc --noEmit && vite build --mode single && node -e \"require('fs').renameSync('dist-single/index.html','dist-single/nabd.html')\""
+    "build:single": "npm run build:wasm && tsc --noEmit && vite build --mode single && node -e \"require('fs').renameSync('dist-single/index.html','dist-single/nabd.html')\"",
+    "build:desktop": "node scripts/build-desktop.mjs",
+    "build:android": "node scripts/build-android.mjs"
   },
   "author": "",
   "license": "MIT",

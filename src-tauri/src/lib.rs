@@ -5,8 +5,25 @@ mod files;
 
 use tauri::Manager;
 
+/// Version 0.2.0 registered the web version's offline service worker inside the app too. It then
+/// kept serving the old page after an update, pointing at script files that no longer exist, and
+/// the app stayed on the loading screen. The app's files are already on the device and it never
+/// registers a worker now, so the worker's storage is removed before the window opens.
+#[cfg(windows)]
+fn remove_stale_service_worker() {
+    if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+        let dir = std::path::Path::new(&local).join("app.nabd.lab").join("EBWebView").join("Default").join("Service Worker");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(windows)]
+    remove_stale_service_worker();
+
+    // Only desktop adds plugins before the common ones.
+    #[cfg_attr(mobile, allow(unused_mut))]
     let mut builder = tauri::Builder::default();
 
     // A second start (e.g. double-clicking another .nabd file) hands its file to the open window.
