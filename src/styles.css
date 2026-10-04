@@ -2450,3 +2450,98 @@ select {
     padding: 2px;
   }
 }
+
+/* Fingers: wires and parts need a much wider touch area than a mouse pointer. */
+@media (pointer: coarse) {
+  .wire .hit {
+    stroke-width: 34;
+  }
+}
+
+/* ---------------------------------------------------------------- phone: bottom sheet
+   On a phone the properties and the circuit doctor slide up from the bottom when a part or a wire
+   is tapped, like the sheets of other Android apps, and leave the upper half of the board visible. */
+@media (max-width: 900px) {
+  .side {
+    top: auto;
+    bottom: 0;
+    inset-inline: 0;
+    width: auto;
+    max-height: 56vh;
+    padding: 0 0 8px;
+    border-radius: 22px 22px 0 0;
+    background: var(--surface);
+    box-shadow: 0 -12px 32px -12px rgba(0, 0, 0, 0.45);
+    z-index: 40;
+    transform: translateY(110%);
+    overscroll-behavior: contain;
+  }
+  body.show-side .side {
+    transform: none;
+  }
+  .side .card {
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+  .sheet-handle {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    padding: 10px 0 6px;
+    border: 0;
+    background: var(--surface);
+    cursor: pointer;
+  }
+  .sheet-handle::before {
+    content: '';
+    width: 44px;
+    height: 5px;
+    border-radius: 99px;
+    background: var(--rule-strong);
+  }
+  /* Bigger targets for fingers inside the sheet. */
+  .side .btn {
+    min-height: 44px;
+  }
+  .side input,
+  .side select {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  /* A dot on the properties button when the circuit doctor has something to say. */
+  .tbtn.has-issues {
+    position: relative;
+  }
+  .tbtn.has-issues::after {
+    content: '';
+    position: absolute;
+    top: 6px;
+    inset-inline-end: 6px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--bad);
+    box-shadow: 0 0 0 2px var(--surface);
+  }
+}
+@media (min-width: 901px) {
+  .sheet-handle {
+    display: none;
+  }
+}
+
+/* Installed app: holding a button must not select its text (inputs stay selectable). */
+.in-app body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.in-app input,
+.in-app textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}

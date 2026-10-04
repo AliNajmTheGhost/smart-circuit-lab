@@ -65,13 +65,23 @@ export class Inspector {
   }
 
   private renderEmpty(): void {
-    const tips: [string, string][] = [
-      ['parts', 'tipPlace'],
-      ['bolt', 'tipWire'],
-      ['grid', 'tipBox'],
-      ['eye', 'tipPan'],
-      ['keyboard', 'tipKeys'],
-    ];
+    // Touch screens get finger instructions; mouse and keyboard tips mean nothing there.
+    const touch = window.matchMedia('(pointer: coarse)').matches;
+    const tips: [string, string][] = touch
+      ? [
+          ['plus', 'tipPlaceTouch'],
+          ['bolt', 'tipWireTouch'],
+          ['props', 'tipEditTouch'],
+          ['eye', 'tipPanTouch'],
+          ['chevron', 'tipBackTouch'],
+        ]
+      : [
+          ['parts', 'tipPlace'],
+          ['bolt', 'tipWire'],
+          ['grid', 'tipBox'],
+          ['eye', 'tipPan'],
+          ['keyboard', 'tipKeys'],
+        ];
     this.el.innerHTML = `
       <header class="card-head"><h2>${t('inspector')}</h2></header>
       <p class="muted">${t('nothingSelected')}</p>

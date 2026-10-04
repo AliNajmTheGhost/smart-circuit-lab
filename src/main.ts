@@ -63,6 +63,13 @@ try {
   document.getElementById('stage')!.innerHTML = `<div class="start-error"><h2>تعذّر تشغيل نبض</h2><p>أعد تحميل الصفحة. إذا تكررت المشكلة فامسح بيانات الموقع من إعدادات المتصفح.</p><pre dir="ltr">${String(err).replace(/[<&]/g, '')}</pre></div>`;
 }
 
+// In the installed app the interface behaves like a native one: no whole-page pinch zoom
+// (the board has its own zoom) and no text selection when a button is held down.
+if (isApp()) {
+  document.documentElement.classList.add('in-app');
+  document.querySelector('meta[name="viewport"]')?.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content');
+}
+
 // Installable, offline-capable web app when served over http(s). The single-file build and the
 // installed app (whose files are already on the device) do without it; an old worker left in the
 // app by an earlier version is removed so it cannot keep serving the old page.

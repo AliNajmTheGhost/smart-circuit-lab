@@ -43,8 +43,17 @@ type Drag =
       pointer: number;
     }
   | { kind: 'box'; start: Pt; cur: Pt; add: boolean; pointer: number }
-  | { kind: 'wire'; from: Pt; moved: boolean; onWire: boolean; pointer: number; hFirst?: boolean }
-  | { kind: 'pan'; start: Pt; orig: Pt; pointer: number }
+  | {
+      kind: 'wire';
+      from: Pt;
+      moved: boolean;
+      onWire: boolean;
+      pointer: number;
+      hFirst?: boolean;
+      /** Touch only: the part whose pin the finger landed on, selected if the finger does not move. */
+      touchPart?: string;
+    }
+  | { kind: 'pan'; start: Pt; orig: Pt; pointer: number; moved: boolean }
   | { kind: 'pinch'; dist: number; zoom: number; mid: Pt; pan: Pt };
 
 interface Attach {
@@ -319,8 +328,12 @@ export class Board {
     const partEl = target.closest('.part') as SVGGElement | null;
     const wireEl = target.closest('.wire') as SVGGElement | null;
 
-    if (pin && !(partEl && defOf(app.part(partEl.dataset.id!)!.type).interactive && !this.nearPinOnly(pin, w))) {
-      this.drag = { kind: 'wire', from: pin, moved: false, onWire: false, pointer: e.pointerId };
+    // A finger is wide: on a zoomed-out phone the pin catch area covers the whole part. Start a
+    // wire from a part's pin only when the finger is right on the pin; elsewhere on the part
+    // the touch selects or moves the part, like any phone app.
+    const onPinProper = pin && (!partEl || !touch || this.nearPinScreen(pin, w, 14));
+    if (pin && onPinProper && !(partEl && defOf(app.part(partEl.dataset.id!)!.type).interactive && !this.nearPinOnly(pin, w))) {
+      this.drag = { kind: 'wire', from: pin, moved: false, onWire: false, pointer: e.pointerId, touchPart: touch ? partEl?.dataset.id : undefined };
       return;
     }
     const additive = e.shiftKey || e.ctrlKey || e.metaKey;
@@ -359,7 +372,12 @@ export class Board {
       this.drag = { kind: 'box', start: w, cur: w, add: additive, pointer: e.pointerId };
       return;
     }
-    this.drag = { kind: 'pan', start: this.screen(e), orig: { ...this.pan }, pointer: e.pointerId };
+    this.drag = { kind: 'pan', start: this.screen(e), orig: { ...this.pan }, pointer: e.pointerId, moved: false };
+  }
+
+  /** Whether the pointer is within `px` screen pixels of a pin. */
+  private nearPinScreen(pin: Pt, w: Pt, px: number): boolean {
+    return Math.hypot(pin.x - w.x, pin.y - w.y) * this.zoom < px;
   }
 
   /** Drag everything that is selected; wires attached to moving parts stretch to follow. */
@@ -407,6 +425,7 @@ export class Board {
     }
     if (d?.kind === 'pan') {
       const s = this.screen(e);
+      if (Math.hypot(s.x - d.start.x, s.y - d.start.y) > 6) d.moved = true;
       this.pan = { x: d.orig.x + s.x - d.start.x, y: d.orig.y + s.y - d.start.y };
       this.applyView();
       return;
@@ -495,6 +514,11 @@ export class Board {
       }
       return;
     }
+    // A tap on empty board (no drag) clears the selection, which also closes the phone's sheet.
+    if (d.kind === 'pan') {
+      if (!d.moved && !cancelled) app.select(null);
+      return;
+    }
     if (d.kind === 'box') {
       this.finishBox(d);
       this.drawOverlay();
@@ -505,6 +529,9 @@ export class Board {
       const end = this.connectable(w, e.pointerType === 'touch') ?? { x: snap(w.x), y: snap(w.y) };
       if (d.moved && (end.x !== d.from.x || end.y !== d.from.y)) {
         this.addWire(d.from, end, d.hFirst);
+      } else if (e.pointerType === 'touch') {
+        // Phones draw wires by dragging only; a tap on a pin selects its part.
+        if (d.touchPart) app.select({ kind: 'part', id: d.touchPart });
       } else if (!d.onWire) {
         this.pendingWire = d.from;
         this.pendingDir = undefined;

@@ -92,10 +92,43 @@ export class Panels {
     };
     app.onSwitch = () => this.sound.click();
     window.addEventListener('keydown', (e) => this.keys(e));
+    this.phoneSheet();
     void handleBackButton(
       () => this.closeTopmost(),
       () => toast(t('backAgain')),
     );
+  }
+
+  /**
+   * On a phone the properties card and the circuit doctor live in a bottom sheet that opens by
+   * itself when a part or wire is tapped and closes when the selection is cleared.
+   */
+  private phoneSheet(): void {
+    const phone = window.matchMedia('(max-width: 900px)');
+    const side = document.getElementById('side');
+    if (!side) return;
+    const handle = document.createElement('button');
+    handle.className = 'sheet-handle';
+    handle.setAttribute('aria-label', t('close'));
+    handle.onclick = () => {
+      document.body.classList.remove('show-side');
+      this.app.select(null);
+    };
+    side.prepend(handle);
+    this.app.on('select', () => {
+      if (!phone.matches) return;
+      const open = this.app.selCount > 0;
+      document.body.classList.toggle('show-side', open);
+      if (open) {
+        document.body.classList.remove('show-palette');
+        side.scrollTop = 0;
+      }
+    });
+    // A dot on the properties button when the doctor has a warning, so it is not missed.
+    this.app.on('notes', () => {
+      const issues = this.app.notes.some((n) => n.level !== 'info');
+      document.querySelector('[data-act="drawer-side"]')?.classList.toggle('has-issues', issues);
+    });
   }
 
   /** For the phone's back button: close the topmost open thing. False when nothing was open. */
