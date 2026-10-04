@@ -419,6 +419,8 @@ export class App {
       if (!raw) return false;
       const d = JSON.parse(raw) as CircuitDoc;
       if (!isDoc(d) || d.parts.length === 0) return false;
+      // A repair challenge left half-done would come back with its fault but without its card.
+      for (const p of d.parts) delete p.params._fault;
       this.load(d, false);
       return true;
     } catch {

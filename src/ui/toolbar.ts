@@ -32,6 +32,8 @@ export class Toolbar {
     app.on('doc', () => this.update());
     app.on('settings', () => this.update());
     this.build();
+    // Once only: build() runs again on every language switch.
+    void onIncomingFile((f) => void this.openText(f.text));
   }
 
   build(): void {
@@ -67,7 +69,6 @@ export class Toolbar {
       const b = (e.target as Element).closest<HTMLElement>('button[data-act]');
       if (b) void this.act(b.dataset.act!, b);
     };
-    void onIncomingFile((f) => void this.openText(f.text));
     $('.brand').onclick = () => this.hooks.openWelcome();
     this.buildDock();
     this.update();
@@ -152,13 +153,22 @@ export class Toolbar {
         app.load({ version: 1, title: '', parts: [], wires: [] });
         this.board.fit();
         break;
-      case 'open': {
-        const f = await openCircuitFile();
-        if (f) await this.openText(f.text);
+      case 'open':
+        try {
+          const f = await openCircuitFile();
+          if (f) await this.openText(f.text);
+        } catch (err) {
+          console.error(err);
+          toast(t('fileError'), true);
+        }
         break;
-      }
       case 'save':
-        if (await app.exportFile()) toast(t('saved'));
+        try {
+          if (await app.exportFile()) toast(t('saved'));
+        } catch (err) {
+          console.error(err);
+          toast(t('fileError'), true);
+        }
         break;
       case 'examples':
         this.examples();

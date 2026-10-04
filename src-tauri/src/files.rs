@@ -32,7 +32,12 @@ fn read<R: Runtime>(app: &AppHandle<R>, p: FilePath) -> Result<OpenedFile, Strin
 /// Ask for a circuit file and return its text, or nothing if the student cancelled.
 #[tauri::command]
 pub async fn open_circuit<R: Runtime>(app: AppHandle<R>) -> Result<Option<OpenedFile>, String> {
-    let picked = app.dialog().file().add_filter("نبض", &EXTENSIONS).blocking_pick_file();
+    let dialog = app.dialog().file();
+    // Android filters by MIME type and has none for .nabd, so a filter would grey out the
+    // student's own files. There the picker shows everything and importText rejects non-circuits.
+    #[cfg(desktop)]
+    let dialog = dialog.add_filter("نبض", &EXTENSIONS);
+    let picked = dialog.blocking_pick_file();
     picked.map(|p| read(&app, p)).transpose()
 }
 

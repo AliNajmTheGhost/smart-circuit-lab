@@ -195,6 +195,22 @@ impl Sim {
         json(&e)
     }
 
+    /// Live values of every part at once, as JSON `{id: {name: value}}`: one call per frame
+    /// instead of one per part.
+    #[wasm_bindgen(js_name = allExtras)]
+    pub fn all_extras(&self) -> String {
+        let all: serde_json::Map<String, serde_json::Value> = self
+            .engine
+            .devices
+            .iter()
+            .map(|d| {
+                let e: serde_json::Map<String, serde_json::Value> = self.engine.extra(&d.id).into_iter().map(|(k, v)| (k.to_string(), finite(v))).collect();
+                (d.id.clone(), serde_json::Value::Object(e))
+            })
+            .collect();
+        json(&all)
+    }
+
     /// Voltage across, current through and power of a part, as JSON.
     pub fn reading(&self, id: &str) -> String {
         match self.engine.reading(id) {

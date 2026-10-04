@@ -46,9 +46,17 @@ function visible(el: Element | null): el is HTMLElement {
   return r.width > 4 && r.height > 4 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth;
 }
 
+let running = false;
+
+export function tourRunning(): boolean {
+  return running;
+}
+
 export function startTour(): void {
+  if (running) return;
   const steps = STEPS.filter((s) => visible(document.querySelector(s.target)));
   if (!steps.length) return;
+  running = true;
   const spot = document.createElement('div');
   spot.className = 'tour-spot';
   const tip = document.createElement('div');
@@ -58,6 +66,7 @@ export function startTour(): void {
   let i = 0;
 
   const end = () => {
+    running = false;
     markDone();
     spot.remove();
     tip.remove();

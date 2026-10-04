@@ -23,11 +23,13 @@ export class Sound {
   private voices = new Map<string, Voice>();
 
   constructor(private readonly app: App) {
-    // Browsers only allow sound after the student touches the page.
+    // Browsers only allow sound after a real gesture; for touch that is the finger lifting,
+    // so listen to all of them until the audio is actually running.
+    const events = ['pointerdown', 'pointerup', 'touchend', 'keydown'] as const;
     const unlock = () => {
-      if (this.ensure()) window.removeEventListener('pointerdown', unlock, true);
+      if (this.ensure()?.state === 'running') for (const ev of events) window.removeEventListener(ev, unlock, true);
     };
-    window.addEventListener('pointerdown', unlock, true);
+    for (const ev of events) window.addEventListener(ev, unlock, true);
     document.addEventListener('visibilitychange', () => this.update());
   }
 
@@ -55,6 +57,8 @@ export class Sound {
   update(): void {
     const ctx = this.ctx;
     if (!ctx || !this.master) return;
+    // Coming back from the background can leave the audio suspended.
+    if (ctx.state === 'suspended' && this.on()) void ctx.resume().catch(() => {});
     const app = this.app;
     const live = new Set<string>();
     const playing = this.on() && app.running && !app.engine?.failure;

@@ -13,7 +13,7 @@ import { ChallengeRunner } from './challenge';
 import { Sound } from './sound';
 import { handleBackButton } from '../platform/back';
 import { toast } from './dom';
-import { startTour, tourDone } from './tour';
+import { startTour, tourDone, tourRunning } from './tour';
 import { Toolbar } from './toolbar';
 import { showWelcome } from './welcome';
 
@@ -115,15 +115,18 @@ export class Panels {
       this.app.select(null);
     };
     side.prepend(handle);
-    this.app.on('select', () => {
-      if (!phone.matches) return;
+    const sync = () => {
+      if (!phone.matches) return document.body.classList.remove('show-side');
       const open = this.app.selCount > 0;
       document.body.classList.toggle('show-side', open);
       if (open) {
         document.body.classList.remove('show-palette');
         side.scrollTop = 0;
       }
-    });
+    };
+    this.app.on('select', sync);
+    // Turning the phone (crossing the width limit) must not leave the sheet out of step.
+    phone.addEventListener('change', sync);
     // A dot on the properties button when the doctor has a warning, so it is not missed.
     this.app.on('notes', () => {
       const issues = this.app.notes.some((n) => n.level !== 'info');
@@ -146,6 +149,8 @@ export class Panels {
       return true;
     }
     if (body.contains('show-palette') || body.contains('show-side')) {
+      // Same as the sheet's handle: closing the properties also clears the selection.
+      if (body.contains('show-side')) this.app.select(null);
       body.remove('show-palette', 'show-side');
       return true;
     }
@@ -184,7 +189,7 @@ export class Panels {
       if (!wrap.hidden) return;
       obs.disconnect();
       setTimeout(() => {
-        if (wrap.hidden && !tourDone()) startTour();
+        if (wrap.hidden && !tourDone() && !tourRunning()) startTour();
       }, 400);
     });
     obs.observe(wrap, { attributes: true, attributeFilter: ['hidden'] });
@@ -224,7 +229,10 @@ export class Panels {
       app.redo();
     } else if (ctrl && k === 's') {
       e.preventDefault();
-      void app.exportFile();
+      app.exportFile().catch((err) => {
+        console.error(err);
+        toast(t('fileError'), true);
+      });
     } else if (ctrl && k === 'a') {
       e.preventDefault();
       app.selectAll();

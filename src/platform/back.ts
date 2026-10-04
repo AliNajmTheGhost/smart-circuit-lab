@@ -9,9 +9,9 @@ const EXIT_WINDOW_MS = 2000;
 
 export async function handleBackButton(closeSomething: () => boolean, warnExit: () => void): Promise<void> {
   if (!isApp()) return;
-  const { onBackButtonPress, exit } = await import('@tauri-apps/api/app');
   let armed = 0;
   try {
+    const { onBackButtonPress, exit } = await import('@tauri-apps/api/app');
     await onBackButtonPress(() => {
       if (closeSomething()) return;
       if (Date.now() - armed < EXIT_WINDOW_MS) void exit(0);

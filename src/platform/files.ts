@@ -39,7 +39,7 @@ export async function openCircuitFile(): Promise<OpenedFile | null> {
       const f = input.files?.[0];
       resolve(f ? { name: f.name, text: await f.text() } : null);
     };
-    // A cancelled picker fires no event in some browsers; the promise then simply never settles.
+    input.addEventListener('cancel', () => resolve(null));
     input.click();
   });
 }

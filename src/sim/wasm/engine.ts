@@ -21,6 +21,7 @@ export interface EngineOptions {
 export class PartView {
   constructor(
     private readonly sim: Sim,
+    private readonly owner: WasmEngine,
     public part: Part,
     public readonly nodes: number[],
   ) {}
@@ -34,13 +35,13 @@ export class PartView {
     this.sim.setBroken(this.part.id, v);
   }
   extra(): Record<string, number> {
-    return fromJsonNumbers(this.sim.extra(this.part.id));
+    return this.owner.extraOf(this.part.id);
   }
 }
 
 /** Meter "OL" crosses the boundary as ±1e300; turn it back into ±Infinity. */
-function fromJsonNumbers(json: string): Record<string, number> {
-  const o = JSON.parse(json) as Record<string, number>;
+function fromJsonNumbers(json: string | Record<string, number>): Record<string, number> {
+  const o = typeof json === 'string' ? (JSON.parse(json) as Record<string, number>) : json;
   for (const k in o) if (Math.abs(o[k]) >= 1e299) o[k] = o[k] > 0 ? Infinity : -Infinity;
   return o;
 }
@@ -61,6 +62,8 @@ export class WasmEngine {
   readonly lu: { readonly reused: number };
   private doc: CircuitDoc;
   private paramsSeen: string[] = [];
+  /** Live values of every part, fetched in one call and kept until the state changes. */
+  private extras: Record<string, Record<string, number>> | null = null;
 
   constructor(
     doc: CircuitDoc,
@@ -77,7 +80,7 @@ export class WasmEngine {
     this.devices = doc.parts.map((p) => {
       const nodes = [...sim.nodes(p.id)];
       pinNodes.set(p.id, nodes.slice(0, defOf(p.type).pins.length));
-      const v = new PartView(sim, p, nodes);
+      const v = new PartView(sim, this, p, nodes);
       this.byId.set(p.id, v);
       return v;
     });
@@ -129,16 +132,25 @@ export class WasmEngine {
   }
 
   private pushChangedParams(): void {
-    this.doc.parts.forEach((p, i) => {
-      const s = JSON.stringify(p.params);
-      if (s === this.paramsSeen[i]) return;
-      this.paramsSeen[i] = s;
-      for (const [k, v] of Object.entries(p.params)) this.setParam(p.id, k, v);
-    });
+    const now = this.doc.parts.map((p) => JSON.stringify(p.params));
+    // The whole document is synced, so a removed parameter is removed in the core too.
+    if (now.some((s, i) => s !== this.paramsSeen[i])) this.syncParts(this.doc);
   }
 
   setParam(id: string, key: string, value: ParamValue): void {
     this.sim.setParam(id, key, JSON.stringify(value));
+    this.extras = null;
+  }
+
+  /** Live values of one part (brightness, readings...), from the shared per-frame snapshot. */
+  extraOf(id: string): Record<string, number> {
+    if (!this.extras) {
+      const all = JSON.parse(this.sim.allExtras()) as Record<string, Record<string, number>>;
+      for (const id in all) all[id] = fromJsonNumbers(all[id]);
+      this.extras = all;
+    }
+    // A copy, so a caller changing the object cannot alter what other panels see.
+    return { ...(this.extras[id] ?? {}) };
   }
 
   /** Point parts at the edited document's values (values changed, wiring did not). */
@@ -149,18 +161,21 @@ export class WasmEngine {
       if (v) v.part = p;
     });
     this.sim.syncParams(JSON.stringify(doc));
+    this.extras = null;
     if (this.opts.watchParams) this.paramsSeen = doc.parts.map((p) => JSON.stringify(p.params));
   }
 
   /** Advance one time step. Returns parts that were damaged in this step. */
   step(): PartIssue[] {
     if (this.opts.watchParams) this.pushChangedParams();
+    this.extras = null;
     return this.sim.step() ? this.takeDamage() : [];
   }
 
   /** Advance many steps in one call (much faster), recording the watched nodes. */
   run(steps: number): PartIssue[] {
     if (this.opts.watchParams) this.pushChangedParams();
+    this.extras = null;
     return this.sim.run(steps) ? this.takeDamage() : [];
   }
 
@@ -186,6 +201,7 @@ export class WasmEngine {
 
   importState(m: Map<string, unknown>, t: number): void {
     this.sim.importState(JSON.stringify(Object.fromEntries(m)), t);
+    this.extras = null;
   }
 
   volt(node: number): number {
