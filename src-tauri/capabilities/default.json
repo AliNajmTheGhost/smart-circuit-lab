@@ -1,7 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "What the interface may do: core events only. Files go through Nabd's own commands.",
-  "windows": ["main"],
-  "permissions": ["core:default"]
+  "description": "What the interface may do: core events, and leaving the app from the Android back button. Files go through Nabd's own commands.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "core:app:allow-exit"
+  ]
 }

@@ -2076,11 +2076,15 @@ select {
     gap: 8px;
     padding: 8px;
   }
-  .brand-text small {
+  /* On a phone every pixel of width counts: the logo alone stands for the name. */
+  .brand-text {
     display: none;
   }
   .mobile-only {
     display: inline-flex !important;
+  }
+  .wide-only {
+    display: none !important;
   }
   .tbtn.soft .lbl,
   .tbtn.accent .lbl {
@@ -2397,4 +2401,52 @@ select {
 }
 .w-tour {
   margin: 4px auto 0;
+}
+
+/* ---------------------------------------------------------------- phone "more" menu */
+.more-menu {
+  min-width: 220px;
+}
+.more-menu hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 4px 0;
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: var(--surface-2);
+}
+
+/* The phone's "add part" button keeps its label: it is the way into the parts list. */
+@media (max-width: 900px) {
+  .tbtn.parts-btn .lbl {
+    display: inline !important;
+  }
+}
+
+/* Narrow phones: tighter top bar so the last button is not cut off at the screen edge. */
+@media (max-width: 560px) {
+  .top {
+    gap: 4px;
+    padding-inline: 6px;
+  }
+  .tools {
+    gap: 4px;
+  }
+  .tgroup {
+    padding: 2px;
+  }
 }

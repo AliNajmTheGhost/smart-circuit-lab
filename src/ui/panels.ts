@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { App } from './app';
 import type { Board } from './board';
 import { DoctorPanel } from './doctor';
@@ -10,6 +11,8 @@ import { ProgressWatcher } from '../progress/watcher';
 import { badgePopup, showAchievements } from './achievements';
 import { ChallengeRunner } from './challenge';
 import { Sound } from './sound';
+import { handleBackButton } from '../platform/back';
+import { toast } from './dom';
 import { startTour, tourDone } from './tour';
 import { Toolbar } from './toolbar';
 import { showWelcome } from './welcome';
@@ -89,6 +92,44 @@ export class Panels {
     };
     app.onSwitch = () => this.sound.click();
     window.addEventListener('keydown', (e) => this.keys(e));
+    void handleBackButton(
+      () => this.closeTopmost(),
+      () => toast(t('backAgain')),
+    );
+  }
+
+  /** For the phone's back button: close the topmost open thing. False when nothing was open. */
+  private closeTopmost(): boolean {
+    const escape = () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    const body = document.body.classList;
+    const modal = document.getElementById('modal');
+    if (document.querySelector('.tour-tip') || (modal && !modal.hidden)) {
+      escape();
+      return true;
+    }
+    const pop = document.querySelector('.popover');
+    if (pop) {
+      pop.remove();
+      return true;
+    }
+    if (body.contains('show-palette') || body.contains('show-side')) {
+      body.remove('show-palette', 'show-side');
+      return true;
+    }
+    if (this.board.cancel()) return true;
+    if (this.app.selCount > 0) {
+      this.app.select(null);
+      return true;
+    }
+    if (this.challenge.active) {
+      this.challenge.close();
+      return true;
+    }
+    if (this.lesson.active) {
+      this.lesson.close();
+      return true;
+    }
+    return false;
   }
 
   welcome(): void {

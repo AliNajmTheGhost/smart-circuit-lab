@@ -38,12 +38,13 @@ export class Toolbar {
     const tools = $('#tools');
     tools.innerHTML = `
       <div class="tgroup">
-        <button class="tbtn mobile-only" data-act="drawer-parts" title="${t('palette')}">${icon('parts')}</button>
-        <button class="tbtn" data-act="new" title="${t('new')}">${icon('new')}<span class="lbl">${t('new')}</span></button>
-        <button class="tbtn" data-act="open" title="${t('open')}">${icon('open')}<span class="lbl">${t('open')}</span></button>
-        <button class="tbtn" data-act="save" title="${t('save')} (Ctrl+S)">${icon('save')}<span class="lbl">${t('save')}</span></button>
+        <button class="tbtn accent mobile-only parts-btn" data-act="drawer-parts" title="${t('palette')}">${icon('plus')}<span class="lbl">${t('addPart')}</span></button>
+        <button class="tbtn mobile-only" data-act="drawer-side" title="${t('props')}">${icon('props')}</button>
+        <button class="tbtn wide-only" data-act="new" title="${t('new')}">${icon('new')}<span class="lbl">${t('new')}</span></button>
+        <button class="tbtn wide-only" data-act="open" title="${t('open')}">${icon('open')}<span class="lbl">${t('open')}</span></button>
+        <button class="tbtn wide-only" data-act="save" title="${t('save')} (Ctrl+S)">${icon('save')}<span class="lbl">${t('save')}</span></button>
       </div>
-      <div class="tgroup">
+      <div class="tgroup wide-only">
         <button class="tbtn soft" data-act="examples">${icon('bulb')}<span class="lbl">${t('examples')}</span></button>
         <button class="tbtn accent" data-act="lessons">${icon('book')}<span class="lbl">${t('lessons')}</span></button>
         <button class="tbtn soft" data-act="challenges" title="${t('challenges')}">${icon('wrench')}<span class="lbl">${t('challenges')}</span></button>
@@ -54,11 +55,13 @@ export class Toolbar {
         <button class="tbtn" data-act="undo" title="${t('undo')} (Ctrl+Z)">${icon('undo')}</button>
         <button class="tbtn" data-act="redo" title="${t('redo')} (Ctrl+Y)">${icon('redo')}</button>
       </div>
-      <div class="tgroup">
+      <div class="tgroup wide-only">
         <button class="tbtn" data-act="view" title="${t('viewMenu')}">${icon('eye')}<span class="lbl">${t('viewMenu')}</span></button>
         <button class="tbtn" data-act="theme" title="${t('theme')}"></button>
         <button class="tbtn" data-act="lang" title="${t('language')}">${icon('globe')}<span class="lbl">${t('language')}</span></button>
-        <button class="tbtn mobile-only" data-act="drawer-side" title="${t('props')}">${icon('props')}</button>
+      </div>
+      <div class="tgroup mobile-only">
+        <button class="tbtn" data-act="more" title="${t('more')}">${icon('more')}</button>
       </div>`;
     tools.onclick = (e) => {
       const b = (e.target as Element).closest<HTMLElement>('button[data-act]');
@@ -188,6 +191,9 @@ export class Toolbar {
       case 'view':
         this.viewMenu(btn);
         break;
+      case 'more':
+        this.moreMenu(btn);
+        break;
       case 'theme':
         app.setOption('theme', THEMES[(THEMES.indexOf(app.theme) + 1) % THEMES.length]);
         break;
@@ -204,6 +210,36 @@ export class Toolbar {
         document.body.classList.remove('show-palette');
         break;
     }
+  }
+
+  /** On a phone the top bar has room for a few buttons only; everything else lives here. */
+  private moreMenu(anchor: HTMLElement): void {
+    const item = (act: string, ic: string, label: string) => `<button class="menu-item" data-more="${act}">${icon(ic)}<span>${label}</span></button>`;
+    popover(
+      anchor,
+      `<div class="menu more-menu">
+        ${item('new', 'new', t('new'))}
+        ${item('open', 'open', t('open'))}
+        ${item('save', 'save', t('save'))}
+        <hr>
+        ${item('lessons', 'book', t('lessons'))}
+        ${item('examples', 'bulb', t('examples'))}
+        ${item('challenges', 'wrench', t('challenges'))}
+        ${item('achievements', 'trophy', t('achievements'))}
+        <hr>
+        ${item('view', 'eye', t('viewMenu'))}
+        ${item('theme', 'sun', t('theme'))}
+        ${item('lang', 'globe', t('language'))}
+      </div>`,
+      (el, close) => {
+        el.addEventListener('click', (e) => {
+          const act = (e.target as Element).closest<HTMLElement>('[data-more]')?.dataset.more;
+          if (!act) return;
+          close();
+          void this.act(act, anchor);
+        });
+      },
+    );
   }
 
   private viewMenu(anchor: HTMLElement): void {

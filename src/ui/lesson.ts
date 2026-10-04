@@ -125,6 +125,10 @@ export class LessonRunner {
     this.render();
   }
 
+  get active(): boolean {
+    return this.lesson !== null;
+  }
+
   close(): void {
     this.lesson = null;
     this.render();
