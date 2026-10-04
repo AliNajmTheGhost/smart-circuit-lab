@@ -122,6 +122,9 @@ export class Panels {
       if (open) {
         document.body.classList.remove('show-palette');
         side.scrollTop = 0;
+        // Keep what was tapped in view above the sheet.
+        const s = this.app.selection;
+        if (s) requestAnimationFrame(() => this.board.reveal(s, window.innerHeight - side.offsetHeight));
       }
     };
     this.app.on('select', sync);
@@ -148,6 +151,8 @@ export class Panels {
       pop.remove();
       return true;
     }
+    // Leaving move mode (or wire drawing) comes before closing the sheet behind it.
+    if (this.board.cancel()) return true;
     if (body.contains('show-palette') || body.contains('show-side')) {
       // Same as the sheet's handle: closing the properties also clears the selection.
       if (body.contains('show-side')) this.app.select(null);

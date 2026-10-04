@@ -122,6 +122,8 @@ export class Board {
   private pointers = new Map<number, Pt>();
   private drag: Drag | null = null;
   private pendingWire: Pt | null = null;
+  /** Phone "move" mode: the next tap on the board puts this part there. */
+  private movingPart: string | null = null;
   private pendingDir: boolean | undefined;
   private hover: Pt | null = null;
   private hoverWorld: Pt = { x: 0, y: 0 };
@@ -309,6 +311,18 @@ export class Board {
     const touch = e.pointerType === 'touch';
     const app = this.app;
 
+    if (this.movingPart) {
+      const id = this.movingPart;
+      const onSelf = (e.target as Element).closest<SVGGElement>('.part')?.dataset.id === id;
+      this.endMoveMode();
+      // On the part itself the finger drags it as usual; anywhere else is its new place.
+      if (!onSelf) {
+        this.movePartTo(id, s);
+        app.select({ kind: 'part', id });
+        return;
+      }
+    }
+
     if (app.placing) {
       const type = app.placing;
       let id = '';
@@ -460,6 +474,8 @@ export class Board {
       d.lastDx = dx;
       d.lastDy = dy;
       d.moved = dx !== 0 || dy !== 0 || d.moved;
+      // The phone's properties sheet steps aside while a part is being dragged.
+      if (d.moved) document.body.classList.add('board-dragging');
       const doc = this.app.doc;
       for (const id of d.parts) {
         const p = this.app.part(id);
@@ -509,6 +525,7 @@ export class Board {
     }
     if (d.pointer !== e.pointerId) return;
     this.drag = null;
+    document.body.classList.remove('board-dragging');
     const app = this.app;
     if (d.kind === 'group') {
       const part = d.clicked ? app.part(d.clicked) : undefined;
@@ -589,6 +606,7 @@ export class Board {
       this.app.doc = JSON.parse(d.snapshot);
       this.render();
     }
+    document.body.classList.remove('board-dragging');
     // A push button held by the first finger must not stay closed when a second finger arrives.
     if (d?.kind === 'group' && d.clicked) {
       const part = this.app.part(d.clicked);
@@ -638,6 +656,10 @@ export class Board {
 
   /** Esc: stop placing or drawing. */
   cancel(): boolean {
+    if (this.movingPart) {
+      this.endMoveMode();
+      return true;
+    }
     if (this.pendingWire) {
       this.pendingWire = null;
       this.updateHint();
@@ -652,6 +674,66 @@ export class Board {
   }
 
   // ------------------------------------------------------------ editing commands
+
+  /**
+   * Phone "move" mode: the properties sheet steps aside and the next tap on the board says where
+   * the part goes. Dragging the part with a finger still works too.
+   */
+  startMoveMode(id: string): void {
+    if (!this.app.part(id)) return;
+    this.movingPart = id;
+    document.body.classList.add('board-moving');
+    this.updateHint();
+  }
+
+  private endMoveMode(): void {
+    this.movingPart = null;
+    document.body.classList.remove('board-moving');
+    this.updateHint();
+  }
+
+  /** Put a part at a grid point; the wires on its pins follow. */
+  private movePartTo(id: string, at: Pt): void {
+    this.app.commit((d) => {
+      const p = d.parts.find((q) => q.id === id);
+      if (!p || (p.x === at.x && p.y === at.y)) return;
+      const att = attachments(d, p);
+      p.x = at.x;
+      p.y = at.y;
+      followPins(d, p, att);
+    });
+  }
+
+  /**
+   * Scroll the board so a selected part or wire is not hidden under something covering the
+   * bottom of the screen (the phone's properties sheet), whose top edge is `coverTop` (client px).
+   */
+  reveal(sel: { kind: 'part' | 'wire'; id: string }, coverTop: number): void {
+    const r = this.svg.getBoundingClientRect();
+    let y0: number;
+    let y1: number;
+    if (sel.kind === 'part') {
+      const p = this.app.part(sel.id);
+      if (!p) return;
+      const b = this.partBox(p);
+      y0 = b.y;
+      y1 = b.y + b.h;
+    } else {
+      const w = this.app.doc.wires.find((x) => x.id === sel.id);
+      if (!w) return;
+      y0 = Math.min(w.a.y, w.b.y);
+      y1 = Math.max(w.a.y, w.b.y);
+    }
+    const top = r.top + y0 * this.zoom + this.pan.y;
+    const bottom = r.top + y1 * this.zoom + this.pan.y;
+    const visTop = r.top + 8;
+    const visBottom = Math.min(r.bottom, coverTop) - 12;
+    if (top >= visTop && bottom <= visBottom) return;
+    // Centre it in the part of the board that is still visible.
+    const shift = (visTop + visBottom) / 2 - (top + bottom) / 2;
+    this.pan = { x: this.pan.x, y: this.pan.y + shift };
+    this.applyView();
+  }
 
   rotateSelected(): void {
     const s = this.app.selection;
@@ -705,7 +787,11 @@ export class Board {
 
   private updateHint(): void {
     const app = this.app;
-    if (app.placing) {
+    const moving = this.movingPart ? app.part(this.movingPart) : undefined;
+    if (moving) {
+      this.hint.textContent = t('moveHint', { label: moving.label });
+      this.hint.hidden = false;
+    } else if (app.placing) {
       this.hint.textContent = t('placing', { name: app.placing ? defName(app.placing) : '' });
       this.hint.hidden = false;
     } else if (this.pendingWire) {

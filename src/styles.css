@@ -2545,3 +2545,41 @@ select {
   -webkit-user-select: text;
   user-select: text;
 }
+
+/* Quick actions at the top of the properties: only on phones, where the full list is below the fold. */
+.quick-actions {
+  display: none;
+}
+@media (max-width: 900px) {
+  .quick-actions {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin: 4px 0 10px;
+  }
+  .quick-actions .btn {
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 2px;
+    font-size: 0.75rem;
+  }
+  /* The same buttons at the bottom would only repeat them. */
+  .side .actions .icon-only {
+    display: none;
+  }
+  /* The description stays short so the values are near the top. */
+  .side .desc {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .side {
+    max-height: 46vh;
+  }
+  /* The sheet steps aside while a part is dragged or being moved. */
+  body.board-dragging .side,
+  body.board-moving .side {
+    transform: translateY(110%) !important;
+  }
+}

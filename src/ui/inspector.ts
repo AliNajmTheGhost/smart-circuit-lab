@@ -139,6 +139,12 @@ export class Inspector {
         <div class="part-icon"><svg viewBox="${b.x - 6} ${b.y - 6} ${b.w + 12} ${b.h + 12}"><g class="sym">${symbolSvg(p.type, p.params, app.std)}</g></svg></div>
         <div class="part-title"><h2>${esc(nameOf(def))}</h2><span class="part-label">${esc(p.label)}</span></div>
       </header>
+      <div class="quick-actions">
+        <button class="btn" data-do="move">${icon('fit')}<span>${t('move')}</span></button>
+        <button class="btn" data-do="rotate">${icon('rotate')}<span>${t('rotate')}</span></button>
+        <button class="btn" data-do="duplicate">${icon('copy')}<span>${t('duplicate')}</span></button>
+        <button class="btn danger" data-do="delete">${icon('trash')}<span>${t('delete')}</span></button>
+      </div>
       <p class="desc">${esc(nameOf(def.desc))}</p>
       ${broken ? `<div class="broken-card">${icon('flame')}<strong>${t('broken')}</strong><button class="btn small" data-do="repair">${icon('wrench')}<span>${t('repair')}</span></button></div>` : ''}
       ${fields ? `<form class="params" autocomplete="off">${fields}</form>` : ''}
@@ -161,6 +167,7 @@ export class Inspector {
       b.addEventListener('click', () => {
         const a = b.dataset.do;
         if (a === 'curve' && p) this.scope.showIv(p);
+        if (a === 'move' && p) this.board.startMoveMode(p.id);
         if (a === 'rotate') this.board.rotateSelected();
         if (a === 'duplicate') this.board.duplicateSelected();
         if (a === 'delete') this.board.deleteSelected();
