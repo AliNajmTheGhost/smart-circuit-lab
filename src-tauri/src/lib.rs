@@ -17,6 +17,16 @@ fn remove_stale_service_worker() {
     }
 }
 
+/// The project's page (source code, releases, contact). The only address the interface may open.
+const PROJECT_PAGE: &str = "https://github.com/AliNajmTheGhost/smart-circuit-lab";
+
+/// Open the project's page in the system browser (from «حول البرنامج»).
+#[tauri::command]
+fn open_project_page<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    app.opener().open_url(PROJECT_PAGE, None::<&str>).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(windows)]
@@ -41,7 +51,8 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .invoke_handler(tauri::generate_handler![files::open_circuit, files::save_circuit, files::launch_file])
+        .plugin(tauri_plugin_opener::init())
+        .invoke_handler(tauri::generate_handler![files::open_circuit, files::save_circuit, files::launch_file, open_project_page])
         .run(tauri::generate_context!())
-        .expect("error while running Nabd");
+        .expect("error while running Smart Circuit Lab");
 }

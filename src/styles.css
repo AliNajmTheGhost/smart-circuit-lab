@@ -1,5 +1,5 @@
 /* =========================================================================
-   Nabd design system
+   Smart Circuit Lab design system
    Deep ink + "pulse" teal, with a warm amber for current and energy.
    Light and dark share one set of tokens; components only use the tokens.
    ========================================================================= */
@@ -371,18 +371,7 @@ select {
   height: 38px;
   transition: transform 0.25s;
 }
-.brand-mark rect,
-.w-mark rect {
-  fill: #0f172a;
-}
-.brand-mark path,
-.w-mark path {
-  fill: none;
-  stroke: #2dd4bf;
-  stroke-width: 3.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
+
 .brand-text strong {
   display: block;
   font-family: var(--display);
@@ -2582,4 +2571,44 @@ select {
   body.board-moving .side {
     transform: translateY(110%) !important;
   }
+}
+
+/* The name is longer than the old one: a smaller line in the header. */
+.brand-text strong {
+  font-size: 1.05rem;
+}
+/* About dialog */
+.about {
+  text-align: center;
+}
+.about .about-logo {
+  width: 88px;
+  height: 88px;
+  margin: 4px auto 10px;
+  display: block;
+}
+.about h2 {
+  margin: 0;
+}
+.about .about-en {
+  color: var(--muted);
+  font-family: var(--mono, monospace);
+  margin: 2px 0 12px;
+}
+.about .about-credit {
+  font-size: 1.05rem;
+  margin: 12px 0 6px;
+}
+.about .about-license {
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.7;
+  max-width: 420px;
+  margin: 8px auto 0;
+}
+.w-credit {
+  margin: 6px 0 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
 }

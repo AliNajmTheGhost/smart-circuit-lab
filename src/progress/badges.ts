@@ -20,7 +20,7 @@ export const BADGES: Badge[] = [
     icon: '🔥',
     ar: 'درس محترق',
     en: 'Burnt lesson',
-    desc: { ar: 'احترقت أول قطعة. لا تقلق، هكذا يتعلم المهندسون، وفي نبض لا تخسر شيئاً!', en: 'Your first part burned. Engineers learn this way, and in Nabd it costs nothing!' },
+    desc: { ar: 'احترقت أول قطعة. لا تقلق، هكذا يتعلم المهندسون، وهنا لا تخسر شيئاً!', en: 'Your first part burned. Engineers learn this way, and here it costs nothing!' },
   },
   { id: 'builder', icon: '🛠️', ar: 'المصمم', en: 'Designer', desc: { ar: 'بنيت بنفسك دائرة من 5 قطع أو أكثر تعمل بلا أخطاء.', en: 'You built a working circuit of 5 or more parts yourself.' } },
   { id: 'repair-1', icon: '🔧', ar: 'أول إصلاح', en: 'First repair', desc: { ar: 'وجدت القطعة التالفة في تحدي صيانة وأصلحتها.', en: 'You found and replaced the faulty part in a repair challenge.' } },
@@ -29,7 +29,7 @@ export const BADGES: Badge[] = [
   { id: 'explorer', icon: '🧭', ar: 'المستكشف', en: 'Explorer', desc: { ar: 'فتحت 10 أمثلة جاهزة.', en: 'You opened 10 examples.' } },
   { id: 'lesson-1', icon: '📘', ar: 'أول تجربة', en: 'First experiment', desc: { ar: 'أكملت أول تجربة من تجارب المنهج.', en: 'You finished your first curriculum experiment.' } },
   { id: 'lesson-5', icon: '📚', ar: 'خمس تجارب', en: 'Five experiments', desc: { ar: 'أكملت خمس تجارب من المنهج.', en: 'You finished five curriculum experiments.' } },
-  { id: 'lesson-all', icon: '🏆', ar: 'نجم المختبر', en: 'Lab star', desc: { ar: 'أكملت كل تجارب المنهج في نبض.', en: 'You finished every curriculum experiment in Nabd.' } },
+  { id: 'lesson-all', icon: '🏆', ar: 'نجم المختبر', en: 'Lab star', desc: { ar: 'أكملت كل تجارب المنهج في البرنامج.', en: 'You finished every curriculum experiment in the program.' } },
 ];
 
 export const badgeById = (id: string): Badge | undefined => BADGES.find((b) => b.id === id);

@@ -14,7 +14,8 @@ if (offline) {
   // Both builds write the same file name: move the offline one to its own name so the next
   // normal build does not get mistaken for it (and the reverse).
   const nsis = join(root, 'target', 'release', 'bundle', 'nsis');
-  const version = JSON.parse(readFileSync(join(root, 'src-tauri', 'tauri.conf.json'), 'utf8')).version;
-  renameSync(join(nsis, `Nabd_${version}_x64-setup.exe`), join(nsis, `Nabd_${version}_x64-offline-setup.exe`));
-  console.log(`offline installer: ${join(nsis, `Nabd_${version}_x64-offline-setup.exe`)}`);
+  const conf = JSON.parse(readFileSync(join(root, 'src-tauri', 'tauri.conf.json'), 'utf8'));
+  const base = `${conf.productName}_${conf.version}_x64`;
+  renameSync(join(nsis, `${base}-setup.exe`), join(nsis, `${base}-offline-setup.exe`));
+  console.log(`offline installer: ${join(nsis, `${base}-offline-setup.exe`)}`);
 }

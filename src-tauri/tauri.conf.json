@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Nabd",
-  "version": "0.2.0",
+  "productName": "Smart Circuit Lab",
+  "version": "0.3.0",
   "identifier": "app.nabd.lab",
   "build": {
     "frontendDist": "../dist",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "نبض · مختبر الدوائر",
+        "title": "مختبر الدوائر الذكية · Smart Circuit Lab",
         "width": 1280,
         "height": 800,
         "minWidth": 360,
@@ -31,9 +31,9 @@
     "targets": [
       "nsis"
     ],
-    "publisher": "Nabd",
-    "shortDescription": "مختبر محاكاة الدوائر الكهربائية والإلكترونية",
-    "longDescription": "نبض: برنامج عربي لمحاكاة الدوائر الكهربائية والإلكترونية لطلاب التعليم المهني، يعمل بدون إنترنت.",
+    "publisher": "Ali Najm",
+    "shortDescription": "مختبر الدوائر الذكية: محاكاة الدوائر الكهربائية والإلكترونية",
+    "longDescription": "مختبر الدوائر الذكية (Smart Circuit Lab): برنامج عربي لمحاكاة الدوائر الكهربائية والإلكترونية لطلاب التعليم المهني، يعمل بدون إنترنت. إعداد المهندس علي نجم.",
     "category": "Education",
     "icon": [
       "icons/32x32.png",
@@ -45,12 +45,13 @@
     "fileAssociations": [
       {
         "ext": [
+          "sclab",
           "nabd"
         ],
-        "name": "Nabd circuit",
-        "description": "دائرة نبض",
+        "name": "Smart Circuit Lab circuit",
+        "description": "دائرة مختبر الدوائر الذكية",
         "role": "Editor",
-        "mimeType": "application/x-nabd"
+        "mimeType": "application/x-smart-circuit-lab"
       }
     ],
     "windows": {
@@ -69,7 +70,8 @@
     },
     "android": {
       "minSdkVersion": 24
-    }
+    },
+    "copyright": "© 2026 المهندس علي نجم (Eng. Ali Najm). Free for non-commercial use (PolyForm Noncommercial 1.0.0)."
   },
-  "mainBinaryName": "Nabd"
+  "mainBinaryName": "SmartCircuitLab"
 }

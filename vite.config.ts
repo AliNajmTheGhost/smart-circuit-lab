@@ -22,6 +22,9 @@ function wasmBase64(): Plugin {
 
 // `npm run build:single` makes one self-contained nabd.html that opens offline by double-click,
 // for school labs without internet. The normal build is the installable web app (PWA).
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
+process.env.VITE_APP_VERSION = pkg.version;
+
 export default defineConfig(({ mode }) => ({
   base: './',
   server: { port: 5173 },

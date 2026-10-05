@@ -5,6 +5,7 @@ import { emptyDoc, type CircuitDoc, type Part } from '../model/types';
 import type { DoctorNote } from '../sim/doctor';
 import type { PartIssue } from '../sim/engine';
 import { WasmEngine as Engine } from '../sim/wasm/engine';
+import { BRAND, VERSION } from '../brand';
 import { saveCircuitFile } from '../platform/files';
 import type { SymbolStd } from './symbols';
 
@@ -430,7 +431,9 @@ export class App {
 
   /** Save the circuit as a .nabd file. Resolves false if the student cancelled. */
   exportFile(): Promise<boolean> {
-    return saveCircuitFile(this.doc.title || 'circuit', JSON.stringify(this.doc, null, 1));
+    // The file says which program made it; the circuit format itself is unchanged.
+    const file = { ...this.doc, generator: `${BRAND.en} ${VERSION}` };
+    return saveCircuitFile(this.doc.title || 'circuit', JSON.stringify(file, null, 1));
   }
 
   /** Open a circuit from the text of a .nabd file. Resolves false if it is not a circuit. */

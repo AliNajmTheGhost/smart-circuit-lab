@@ -14,7 +14,8 @@ pub struct OpenedFile {
     pub text: String,
 }
 
-const EXTENSIONS: [&str; 2] = ["nabd", "json"];
+/// Saved circuits use .sclab; files from before the new name (.nabd) and plain JSON still open.
+const EXTENSIONS: [&str; 3] = ["sclab", "nabd", "json"];
 
 fn file_name(p: &FilePath) -> String {
     match p {
@@ -36,7 +37,7 @@ pub async fn open_circuit<R: Runtime>(app: AppHandle<R>) -> Result<Option<Opened
     // Android filters by MIME type and has none for .nabd, so a filter would grey out the
     // student's own files. There the picker shows everything and importText rejects non-circuits.
     #[cfg(desktop)]
-    let dialog = dialog.add_filter("نبض", &EXTENSIONS);
+    let dialog = dialog.add_filter("مختبر الدوائر الذكية", &EXTENSIONS);
     let picked = dialog.blocking_pick_file();
     picked.map(|p| read(&app, p)).transpose()
 }
@@ -44,7 +45,7 @@ pub async fn open_circuit<R: Runtime>(app: AppHandle<R>) -> Result<Option<Opened
 /// Ask where to save and write the circuit there. Returns false if the student cancelled.
 #[tauri::command]
 pub async fn save_circuit<R: Runtime>(app: AppHandle<R>, name: String, text: String) -> Result<bool, String> {
-    let Some(p) = app.dialog().file().add_filter("نبض", &["nabd"]).set_file_name(&name).blocking_save_file() else {
+    let Some(p) = app.dialog().file().add_filter("مختبر الدوائر الذكية", &["sclab"]).set_file_name(&name).blocking_save_file() else {
         return Ok(false);
     };
     let mut opts = tauri_plugin_fs::OpenOptions::new();

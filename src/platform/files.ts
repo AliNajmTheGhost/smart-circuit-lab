@@ -2,6 +2,7 @@
  * Opening and saving circuit files. In the app this uses the system's own dialogs;
  * in a browser it falls back to a download and a file picker.
  */
+import { BRAND } from '../brand';
 import { isApp } from './index';
 
 export interface OpenedFile {
@@ -11,7 +12,7 @@ export interface OpenedFile {
 
 /** Save `text` as `<name>.nabd`. Resolves false if the student cancelled. */
 export async function saveCircuitFile(name: string, text: string): Promise<boolean> {
-  const fileName = `${safeName(name)}.nabd`;
+  const fileName = `${safeName(name)}.${BRAND.ext}`;
   if (isApp()) {
     const { invoke } = await import('@tauri-apps/api/core');
     return invoke<boolean>('save_circuit', { name: fileName, text });
@@ -34,7 +35,7 @@ export async function openCircuitFile(): Promise<OpenedFile | null> {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.nabd,.json';
+    input.accept = `.${BRAND.ext},.nabd,.json`;
     input.onchange = async () => {
       const f = input.files?.[0];
       resolve(f ? { name: f.name, text: await f.text() } : null);

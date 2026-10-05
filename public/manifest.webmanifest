@@ -1,19 +1,36 @@
 {
-  "name": "نبض · مختبر الدوائر",
-  "short_name": "نبض",
-  "description": "مختبر محاكاة الدوائر الكهربائية والإلكترونية لطلاب التعليم المهني",
+  "name": "مختبر الدوائر الذكية · Smart Circuit Lab",
+  "short_name": "الدوائر الذكية",
+  "description": "مختبر الدوائر الذكية: محاكاة الدوائر الكهربائية والإلكترونية لطلاب التعليم المهني",
   "lang": "ar",
   "dir": "rtl",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#13222b",
-  "theme_color": "#13222b",
+  "background_color": "#1f2937",
+  "theme_color": "#1f2937",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
-    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
   ]
 }

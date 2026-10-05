@@ -4,11 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#0b1220" />
-    <meta name="description" content="نبض: مختبر محاكاة الدوائر الكهربائية والإلكترونية لطلاب التعليم المهني" />
+    <meta name="description" content="مختبر الدوائر الذكية (Smart Circuit Lab): نبض: مختبر محاكاة الدوائر الكهربائية والإلكترونية لطلاب التعليم المهني" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon-192.png" />
-    <title>نبض · مختبر الدوائر</title>
+    <title>مختبر الدوائر الذكية · Smart Circuit Lab</title>
     <style>
       /* Splash styles live here so the opening screen shows before anything else loads. */
       html,
@@ -47,6 +47,12 @@
         padding: 24px;
         text-align: center;
       }
+      .sp-logo {
+        display: block;
+        width: 84px;
+        height: 84px;
+        margin: 0 auto 6px;
+      }
       .sp-pulse {
         width: min(360px, 78vw);
         height: auto;
@@ -78,9 +84,10 @@
       }
       .sp-name {
         margin: 6px 0 0;
-        font-size: clamp(64px, 14vw, 112px);
+        font-size: clamp(30px, 7.5vw, 64px);
+        white-space: nowrap;
         font-weight: 700;
-        line-height: 1;
+        line-height: 1.35;
         letter-spacing: -0.01em;
         background: linear-gradient(180deg, #ffffff 20%, #99f6e4 100%);
         -webkit-background-clip: text;
@@ -169,26 +176,27 @@
   <body>
     <div id="splash" role="status" aria-live="polite">
       <div class="sp-center">
+        <svg class="sp-logo" viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="26" fill="#1f2937"/><g fill="#9ca3af"><rect x="20" y="44" width="12" height="5" rx="1.5"/><rect x="20" y="58" width="12" height="5" rx="1.5"/><rect x="20" y="72" width="12" height="5" rx="1.5"/><rect x="88" y="44" width="12" height="5" rx="1.5"/><rect x="88" y="58" width="12" height="5" rx="1.5"/><rect x="88" y="72" width="12" height="5" rx="1.5"/></g><rect x="32" y="32" width="56" height="56" rx="10" fill="none" stroke="#e8eef2" stroke-width="5"/><path d="M40 60 L46 50 L52 70 L58 50 L64 70 L70 50 L76 70 L80 60" fill="none" stroke="#f5b400" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/><circle cx="40" cy="40" r="2.5" fill="#e8eef2"/></svg>
         <svg class="sp-pulse" viewBox="0 0 360 90" aria-hidden="true">
-          <path class="sp-base" d="M4 50H120l14-2 12-34 18 66 16-50 12 26 8-6H356" />
-          <path class="sp-trace" d="M4 50H120l14-2 12-34 18 66 16-50 12 26 8-6H356" pathLength="520" />
+          <path class="sp-base" d="M4 50H136l6-14 12 28 12-28 12 28 12-28 12 28 6-14H356" />
+          <path class="sp-trace" d="M4 50H136l6-14 12 28 12-28 12 28 12-28 12 28 6-14H356" pathLength="520" />
         </svg>
-        <h1 class="sp-name">نبض</h1>
-        <div class="sp-latin">NABD</div>
-        <p class="sp-tag">مختبر الدوائر الكهربائية والإلكترونية</p>
+        <h1 class="sp-name">مختبر الدوائر الذكية</h1>
+        <div class="sp-latin">SMART CIRCUIT LAB</div>
+        <p class="sp-tag">محاكاة الدوائر الكهربائية والإلكترونية</p>
         <div class="sp-load">
           <div class="sp-bar"><i></i></div>
           <div class="sp-row"><span class="sp-status">جارٍ التحميل…</span><span class="sp-pct">0%</span></div>
         </div>
       </div>
-      <p class="sp-foot">قسم الاتصالات · التعليم المهني</p>
+      <p class="sp-foot">إعداد: المهندس علي نجم</p>
     </div>
 
     <div id="app">
       <header class="top">
         <button class="brand" title="الصفحة الرئيسية">
-          <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="14" /><path d="M6 26h9l4-12 7 22 5-14 3 4h8" /></svg>
-          <span class="brand-text"><strong>نبض</strong><small>مختبر الدوائر</small></span>
+          <svg class="brand-mark" viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="26" fill="#1f2937"/><g fill="#9ca3af"><rect x="20" y="44" width="12" height="5" rx="1.5"/><rect x="20" y="58" width="12" height="5" rx="1.5"/><rect x="20" y="72" width="12" height="5" rx="1.5"/><rect x="88" y="44" width="12" height="5" rx="1.5"/><rect x="88" y="58" width="12" height="5" rx="1.5"/><rect x="88" y="72" width="12" height="5" rx="1.5"/></g><rect x="32" y="32" width="56" height="56" rx="10" fill="none" stroke="#e8eef2" stroke-width="5"/><path d="M40 60 L46 50 L52 70 L58 50 L64 70 L70 50 L76 70 L80 60" fill="none" stroke="#f5b400" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/><circle cx="40" cy="40" r="2.5" fill="#e8eef2"/></svg>
+          <span class="brand-text"><strong>مختبر الدوائر الذكية</strong><small>Smart Circuit Lab</small></span>
         </button>
         <nav class="tools" id="tools" aria-label="الأدوات"></nav>
       </header>

@@ -60,7 +60,7 @@ try {
 } catch (err) {
   // Start-up failed: show a plain message instead of a blank or frozen screen.
   console.error(err);
-  document.getElementById('stage')!.innerHTML = `<div class="start-error"><h2>تعذّر تشغيل نبض</h2><p>أعد تحميل الصفحة. إذا تكررت المشكلة فامسح بيانات الموقع من إعدادات المتصفح.</p><pre dir="ltr">${String(err).replace(/[<&]/g, '')}</pre></div>`;
+  document.getElementById('stage')!.innerHTML = `<div class="start-error"><h2>تعذّر تشغيل مختبر الدوائر الذكية</h2><p>أعد تحميل الصفحة. إذا تكررت المشكلة فامسح بيانات الموقع من إعدادات المتصفح.</p><pre dir="ltr">${String(err).replace(/[<&]/g, '')}</pre></div>`;
 }
 
 // In the installed app the interface behaves like a native one: no whole-page pinch zoom

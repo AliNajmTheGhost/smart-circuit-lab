@@ -8,6 +8,7 @@ import { Palette } from './palette';
 import { Scope } from './scope';
 import { ProgressStore } from '../progress/store';
 import { ProgressWatcher } from '../progress/watcher';
+import { showAbout } from './about';
 import { badgePopup, showAchievements } from './achievements';
 import { ChallengeRunner } from './challenge';
 import { Sound } from './sound';
@@ -182,6 +183,7 @@ export class Panels {
       examples: () => this.toolbar.examples(),
       lessons: () => this.lesson.chooser(),
       tour: () => startTour(),
+      about: () => showAbout(),
     });
     if (!tourDone()) this.tourAfterDialogs();
   }

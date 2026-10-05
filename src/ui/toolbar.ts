@@ -4,6 +4,7 @@ import { openCircuitFile, onIncomingFile } from '../platform/files';
 import { fmt } from '../units';
 import { SPEEDS, type App, type Theme } from './app';
 import type { Board } from './board';
+import { showAbout } from './about';
 import { $, confirmBox, esc, icon, modal, popover, toast } from './dom';
 import type { Scope } from './scope';
 
@@ -204,6 +205,9 @@ export class Toolbar {
       case 'more':
         this.moreMenu(btn);
         break;
+      case 'about':
+        showAbout();
+        break;
       case 'theme':
         app.setOption('theme', THEMES[(THEMES.indexOf(app.theme) + 1) % THEMES.length]);
         break;
@@ -240,6 +244,7 @@ export class Toolbar {
         ${item('view', 'eye', t('viewMenu'))}
         ${item('theme', 'sun', t('theme'))}
         ${item('lang', 'globe', t('language'))}
+        ${item('about', 'info', t('about'))}
       </div>`,
       (el, close) => {
         el.addEventListener('click', (e) => {

@@ -3,9 +3,9 @@ resolver = "3"
 members = ["crates/core", "crates/wasm", "src-tauri"]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
-license = "MIT"
+license-file = "LICENSE"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }

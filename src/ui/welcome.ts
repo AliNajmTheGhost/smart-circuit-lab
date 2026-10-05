@@ -2,6 +2,8 @@ import { EXAMPLES } from '../examples';
 import { t } from '../i18n';
 import { LESSONS } from '../lessons/lessons';
 import { PARTS } from '../model/library';
+import { BRAND, logoSvg } from '../brand';
+import { getLang } from '../i18n';
 import { icon, modal } from './dom';
 
 const SKIP_KEY = 'nabd.skipWelcome';
@@ -13,6 +15,7 @@ export interface WelcomeActions {
   examples(): void;
   lessons(): void;
   tour(): void;
+  about(): void;
 }
 
 export function welcomeSkipped(): boolean {
@@ -36,7 +39,7 @@ export function showWelcome(actions: WelcomeActions): void {
   modal(
     `<div class="welcome">
       <header class="w-hero">
-        <svg class="w-mark" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="14"/><path d="M6 26h9l4-12 7 22 5-14 3 4h8"/></svg>
+        ${logoSvg('w-mark')}
         <div>
           <h1>${t('wTitle')}</h1>
           <p>${t('wSub')}</p>
@@ -60,6 +63,7 @@ export function showWelcome(actions: WelcomeActions): void {
         <span><b>3</b>${t('statGrades')}</span>
       </div>
       <button class="link w-tour" data-w="tour">${icon('eye')}${t('tourStart')}</button>
+      <p class="w-credit">${t('madeBy')}: ${getLang() === 'ar' ? BRAND.author.ar : BRAND.author.en} · <button class="link" data-w="about">${t('about')}</button></p>
       <label class="w-skip"><input type="checkbox" data-skip${skip ? ' checked' : ''}><span>${t('wSkip')}</span></label>
     </div>`,
     (el, close) => {
@@ -81,6 +85,7 @@ export function showWelcome(actions: WelcomeActions): void {
         if (id === 'examples') actions.examples();
         if (id === 'new') actions.newCircuit();
         if (id === 'tour') actions.tour();
+        if (id === 'about') actions.about();
       });
     },
     'welcome-card',

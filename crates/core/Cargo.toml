@@ -3,7 +3,7 @@ name = "nabd-core"
 description = "Circuit simulation engine for Nabd: drawing to netlist, transient and AC analysis, part models"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
+license-file = "../../LICENSE"
 
 [dependencies]
 serde.workspace = true
