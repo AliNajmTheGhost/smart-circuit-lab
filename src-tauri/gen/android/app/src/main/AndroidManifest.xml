@@ -29,7 +29,8 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:mimeType="application/x-nabd" />
+                <data android:mimeType="application/x-smart-circuit-lab" />
+                <data android:pathPattern=".*\\.sclab" />
                 <data android:pathPattern=".*\\.nabd" />
             </intent-filter>
             
