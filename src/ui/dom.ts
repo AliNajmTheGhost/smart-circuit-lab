@@ -4,8 +4,13 @@ import { t } from '../i18n';
 
 export const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document): T => root.querySelector(sel) as T;
 
-export const esc = (s: string): string =>
-  s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+/**
+ * Text on its way into a panel, never markup. It takes any value, because a circuit file may
+ * hold something that is not a string, and escapes single quotes too so the result is safe
+ * inside an attribute however it is quoted.
+ */
+export const esc = (s: unknown): string =>
+  String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 /** Stroke icons on a 24×24 grid, drawn in the current text colour. */
 const ICON: Record<string, string> = {

@@ -194,8 +194,8 @@ export class Inspector {
       return `<div class="frow">${lbl}<select class="select" id="${id}" data-key="${d.key}">${opts}</select></div>`;
     }
     if (d.kind === 'slider') {
-      const pct = Math.round(Number(v) * 100);
-      return `<div class="frow">${lbl}<div class="slider"><input type="range" id="${id}" data-key="${d.key}" min="${d.min}" max="${d.max}" step="${d.step}" value="${v}"><output>${pct}%</output></div></div>`;
+      const pct = Math.round((Number(v) || 0) * 100);
+      return `<div class="frow">${lbl}<div class="slider"><input type="range" id="${id}" data-key="${d.key}" min="${d.min}" max="${d.max}" step="${d.step}" value="${esc(String(v))}"><output>${pct}%</output></div></div>`;
     }
     // The student types only the number, then picks kilo, milli, micro... from the list.
     const prefixes = prefixesFor(d.unit);

@@ -40,6 +40,10 @@ android {
                 storePassword = keystoreProperties.getProperty("storePassword")
                 keyAlias = keystoreProperties.getProperty("keyAlias")
                 keyPassword = keystoreProperties.getProperty("keyPassword")
+                // v3 records that this key may one day be replaced by a new one. Without it a
+                // lost or leaked key could never be rotated: phones would refuse every update.
+                enableV2Signing = true
+                enableV3Signing = true
             }
         }
     }

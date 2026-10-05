@@ -16,6 +16,11 @@ function decode(b64: string): Uint8Array {
   return out;
 }
 
+/**
+ * The core is compiled from bytes rather than fetched, so the page's content security policy
+ * must allow `'wasm-unsafe-eval'` in `script-src` (it is set in `src-tauri/tauri.conf.json`
+ * and in the policy Vite writes into the web build). Without it the lab cannot start.
+ */
 export function loadCore(): Promise<void> {
   ready ??= init({ module_or_path: decode(wasmBase64) }).then(() => {
     if (partTypes() < 1) throw new Error('simulation core has no parts');

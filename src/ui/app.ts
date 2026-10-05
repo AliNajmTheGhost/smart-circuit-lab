@@ -1,5 +1,6 @@
 import { getLang, message, setLang, t, type Lang } from '../i18n';
 import { cloneDoc, normalizeWires, topologyKey } from '../model/docops';
+import { sanitizeDoc } from '../model/sanitize';
 import { defOf } from '../model/library';
 import { emptyDoc, type CircuitDoc, type Part } from '../model/types';
 import type { DoctorNote } from '../sim/doctor';
@@ -11,6 +12,8 @@ import type { SymbolStd } from './symbols';
 
 export type Selection = { kind: 'part' | 'wire'; id: string } | null;
 export type Theme = 'system' | 'light' | 'dark';
+/** How much of a circuit file could be opened. */
+export type ImportResult = 'ok' | 'partly' | 'bad';
 type EventName = 'doc' | 'select' | 'frame' | 'mode' | 'settings' | 'notes';
 
 export interface Note extends DoctorNote {
@@ -250,12 +253,20 @@ export class App {
     const dt = this.chooseDt();
     const key = `${topologyKey(this.doc)}|${dt}`;
     if (key !== this.topo || !this.engine) {
-      const state = this.engine?.exportState();
-      const t0 = this.engine?.t ?? 0;
+      // The new core is built first and the old one is let go only once it exists. A circuit the
+      // core refuses would otherwise leave the program holding a core it has already freed, and
+      // every later step — the clock, the readings, opening another circuit — would fail.
+      const next = new Engine(this.doc, dt, new Set(this.broken.keys()));
+      const old = this.engine;
+      try {
+        const state = old?.exportState();
+        if (state) next.importState(state, old!.t);
+      } catch {
+        /* the previous run's state does not fit the new circuit; start it from zero */
+      }
       this.topo = key;
-      this.engine?.dispose();
-      this.engine = new Engine(this.doc, dt, new Set(this.broken.keys()));
-      if (state) this.engine.importState(state, t0);
+      this.engine = next;
+      old?.dispose();
     } else {
       this.engine.syncParts(this.doc);
     }
@@ -418,11 +429,13 @@ export class App {
     try {
       const raw = localStorage.getItem(STORE_DOC);
       if (!raw) return false;
-      const d = JSON.parse(raw) as CircuitDoc;
-      if (!isDoc(d) || d.parts.length === 0) return false;
+      // Storage is checked as strictly as a file: another page on the same origin, or a circuit
+      // left behind by an older version, must not be able to put anything odd on the board.
+      const s = sanitizeDoc(JSON.parse(raw));
+      if (!s || s.doc.parts.length === 0) return false;
       // A repair challenge left half-done would come back with its fault but without its card.
-      for (const p of d.parts) delete p.params._fault;
-      this.load(d, false);
+      for (const p of s.doc.parts) delete p.params._fault;
+      this.load(s.doc, false);
       return true;
     } catch {
       return false;
@@ -436,16 +449,18 @@ export class App {
     return saveCircuitFile(this.doc.title || 'circuit', JSON.stringify(file, null, 1));
   }
 
-  /** Open a circuit from the text of a .nabd file. Resolves false if it is not a circuit. */
-  async importText(text: string): Promise<boolean> {
+  /**
+   * Open a circuit from the text of a .sclab file: 'ok', 'partly' when some of the file could
+   * not be used and was left out, or 'bad' when it is not a circuit at all.
+   */
+  async importText(text: string): Promise<ImportResult> {
     try {
-      const d = JSON.parse(text);
-      if (!isDoc(d)) return false;
-      for (const p of d.parts) defOf(p.type);
-      this.load(d);
-      return true;
+      const s = sanitizeDoc(JSON.parse(text));
+      if (!s) return 'bad';
+      this.load(s.doc);
+      return s.dropped > 0 ? 'partly' : 'ok';
     } catch {
-      return false;
+      return 'bad';
     }
   }
 }
@@ -454,11 +469,6 @@ function applyTheme(theme: Theme): void {
   const root = document.documentElement;
   if (theme === 'system') delete root.dataset.theme;
   else root.dataset.theme = theme;
-}
-
-function isDoc(d: unknown): d is CircuitDoc {
-  const o = d as CircuitDoc;
-  return !!o && o.version === 1 && Array.isArray(o.parts) && Array.isArray(o.wires);
 }
 
 export { t };
