@@ -73,7 +73,16 @@ interface Attach {
   pin: number;
 }
 
-const escapeXml = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+/**
+ * Everything that goes into the drawing is written as text, never as markup. It takes any value
+ * (a circuit file may hold something that is not a string at all) and single quotes are escaped
+ * too, so the result is safe inside an attribute however it is quoted.
+ */
+const escapeXml = (s: unknown): string =>
+  String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+
+/** A number on its way into the drawing: anything else becomes 0 rather than markup. */
+const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 
 function hexToRgb(hex: string): [number, number, number] {
   const m = hex.trim().replace('#', '');
@@ -808,8 +817,8 @@ export class Board {
     this.gWires.innerHTML = app.doc.wires
       .map((w) => {
         const cls = app.isSelected('wire', w.id) ? ' selected' : '';
-        const xy = `x1="${w.a.x}" y1="${w.a.y}" x2="${w.b.x}" y2="${w.b.y}"`;
-        return `<g class="wire${cls}" data-id="${w.id}"><line class="hit" ${xy}/><line class="w" ${xy}/><line class="flow" ${xy}/></g>`;
+        const xy = `x1="${num(w.a.x)}" y1="${num(w.a.y)}" x2="${num(w.b.x)}" y2="${num(w.b.y)}"`;
+        return `<g class="wire${cls}" data-id="${escapeXml(w.id)}"><line class="hit" ${xy}/><line class="w" ${xy}/><line class="flow" ${xy}/></g>`;
       })
       .join('');
 
@@ -819,7 +828,7 @@ export class Board {
         const def = defOf(p.type);
         const b = def.box;
         const broken = app.broken.has(p.id);
-        const cls = `part type-${p.type}${app.isSelected('part', p.id) ? ' selected' : ''}${broken ? ' broken' : ''}${def.interactive ? ' interactive' : ''}`;
+        const cls = `part type-${escapeXml(p.type)}${app.isSelected('part', p.id) ? ' selected' : ''}${broken ? ' broken' : ''}${def.interactive ? ' interactive' : ''}`;
         let label = '';
         if (def.labelAt) {
           // Upside-down parts keep their label on top, and upright ones always on the right.
@@ -828,7 +837,7 @@ export class Board {
           const anchor = side ? (o.x > 0 ? 'start' : 'end') : 'middle';
           const y = p.y + o.y + (side ? 4 : o.y > 0 ? 8 : 0);
           const val = def.valueText?.(p.params) ?? '';
-          label = `<text class="plabel" x="${p.x + o.x}" y="${y}" text-anchor="${anchor}"><tspan class="lname">${escapeXml(p.label)}</tspan>${val ? `<tspan class="lval" dx="5">${escapeXml(val)}</tspan>` : ''}</text>`;
+          label = `<text class="plabel" x="${num(p.x + o.x)}" y="${num(y)}" text-anchor="${anchor}"><tspan class="lname">${escapeXml(p.label)}</tspan>${val ? `<tspan class="lval" dx="5">${escapeXml(val)}</tspan>` : ''}</text>`;
         }
         let readout = '';
         const lcd = LCD_WIDTH[p.type];
@@ -840,26 +849,26 @@ export class Board {
         else if (p.type === 'probe') o = rotatePt({ x: 0, y: -31 }, p.rot);
         else if (def.readoutAt) o = rotatePt(def.readoutAt, p.rot);
         if (o) {
-          if (lcd) readout += `<rect class="lcd" x="${p.x + o.x - lcd / 2}" y="${p.y + o.y - 10}" width="${lcd}" height="18" rx="3"/>`;
-          const txt = p.type === 'probe' ? `CH${p.params.ch}` : '';
-          readout += `<text class="readout${lcd ? ' meter' : ''}" x="${p.x + o.x}" y="${p.y + o.y + 4}" text-anchor="middle">${txt}</text>`;
+          if (lcd) readout += `<rect class="lcd" x="${num(p.x + o.x - lcd / 2)}" y="${num(p.y + o.y - 10)}" width="${lcd}" height="18" rx="3"/>`;
+          const txt = p.type === 'probe' ? `CH${escapeXml(p.params.ch)}` : '';
+          readout += `<text class="readout${lcd ? ' meter' : ''}" x="${num(p.x + o.x)}" y="${num(p.y + o.y + 4)}" text-anchor="middle">${txt}</text>`;
         }
         const smoke = broken
-          ? `<g class="smoke" transform="translate(${p.x} ${p.y - 10})"><circle r="5"/><circle r="4" cx="6"/><circle r="3" cx="-5"/></g><text class="broken-x" x="${p.x}" y="${p.y + 5}" text-anchor="middle">✕</text>`
+          ? `<g class="smoke" transform="translate(${num(p.x)} ${num(p.y - 10)})"><circle r="5"/><circle r="4" cx="6"/><circle r="3" cx="-5"/></g><text class="broken-x" x="${num(p.x)}" y="${num(p.y + 5)}" text-anchor="middle">✕</text>`
           : '';
         const pins = def.pins.length;
         if (pins === 2) {
           const a = pinWorld(p, 0);
           const c = pinWorld(p, 1);
-          flows.push(`<line class="flow" data-part="${p.id}" data-pin="0" data-sign="1" x1="${a.x}" y1="${a.y}" x2="${c.x}" y2="${c.y}"/>`);
+          flows.push(`<line class="flow" data-part="${escapeXml(p.id)}" data-pin="0" data-sign="1" x1="${num(a.x)}" y1="${num(a.y)}" x2="${num(c.x)}" y2="${num(c.y)}"/>`);
         } else if (pins > 2) {
           for (let i = 0; i < pins; i++) {
             const a = pinWorld(p, i);
-            flows.push(`<line class="flow" data-part="${p.id}" data-pin="${i}" data-sign="1" x1="${a.x}" y1="${a.y}" x2="${p.x}" y2="${p.y}"/>`);
+            flows.push(`<line class="flow" data-part="${escapeXml(p.id)}" data-pin="${i}" data-sign="1" x1="${num(a.x)}" y1="${num(a.y)}" x2="${num(p.x)}" y2="${num(p.y)}"/>`);
           }
         }
-        return `<g class="${cls}" data-id="${p.id}">
-          <g transform="translate(${p.x} ${p.y}) rotate(${p.rot * 90})">
+        return `<g class="${cls}" data-id="${escapeXml(p.id)}">
+          <g transform="translate(${num(p.x)} ${num(p.y)}) rotate(${num(p.rot) * 90})">
             <rect class="hit" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}"/>
             <g class="sym">${symbolSvg(p.type, p.params, std, p.rot)}</g>
           </g>${label}${readout}${smoke}</g>`;
@@ -943,7 +952,7 @@ export class Board {
 
   private previewWire(a: Pt, b: Pt, hFirst?: boolean): string {
     const ws = this.route(a, b, hFirst);
-    return ws.map((w) => `<line class="wirepreview" x1="${w.a.x}" y1="${w.a.y}" x2="${w.b.x}" y2="${w.b.y}"/>`).join('');
+    return ws.map((w) => `<line class="wirepreview" x1="${num(w.a.x)}" y1="${num(w.a.y)}" x2="${num(w.b.x)}" y2="${num(w.b.y)}"/>`).join('');
   }
 
   private drawGhost(): void {
@@ -955,7 +964,7 @@ export class Board {
     const x = snap(this.hoverWorld.x);
     const y = snap(this.hoverWorld.y);
     const params = Object.fromEntries(defOf(type).params.map((p) => [p.key, p.def]));
-    this.gGhost.innerHTML = `<g class="part ghostpart" transform="translate(${x} ${y})"><g class="sym">${symbolSvg(type, params, this.app.std)}</g></g>`;
+    this.gGhost.innerHTML = `<g class="part ghostpart" transform="translate(${num(x)} ${num(y)})"><g class="sym">${symbolSvg(type, params, this.app.std)}</g></g>`;
   }
 
   // ------------------------------------------------------------ live animation

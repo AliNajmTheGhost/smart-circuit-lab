@@ -138,12 +138,16 @@ export class Toolbar {
     if (el && el.textContent !== s) el.textContent = s;
   }
 
-  /** Load a circuit from file text, with a message either way. */
+  /** Load a circuit from file text, with a message saying how much of it could be opened. */
   private async openText(text: string): Promise<void> {
-    if (await this.app.importText(text)) {
-      this.board.fit();
-      toast(t('opened'));
-    } else toast(t('badFile'), true);
+    const result = await this.app.importText(text);
+    if (result === 'bad') {
+      toast(t('badFile'), true);
+      return;
+    }
+    this.board.fit();
+    // A circuit that lost a part or a wire still opens, but the student is told so.
+    toast(t(result === 'partly' ? 'openedPartly' : 'opened'), result === 'partly');
   }
 
   async act(a: string, btn: HTMLElement): Promise<void> {
