@@ -57,7 +57,7 @@ export class App {
   sound = true;
   scopeOpen = false;
   /** 'system' follows the device; light and dark are explicit choices. */
-  theme: Theme = 'system';
+  theme: Theme = 'dark';
   engine!: Engine;
   /** Damaged parts stay damaged until the student replaces them. */
   broken = new Map<string, PartIssue>();
