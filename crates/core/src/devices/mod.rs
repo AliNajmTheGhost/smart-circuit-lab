@@ -172,6 +172,7 @@ pub fn create(kind: &str, p: &Params, pins: usize) -> Box<dyn Model> {
         "ecap" => Box::new(storage::Capacitor::new(true)),
         "inductor" => Box::new(storage::Inductor::default()),
         "transformer" => Box::new(storage::Transformer::default()),
+        "ctransformer" => Box::new(storage::CenterTap::default()),
         "diode" => Box::new(Diode::new(DiodeKind::Diode)),
         "schottky" => Box::new(Diode::new(DiodeKind::Schottky)),
         "zener" => Box::new(Diode::new(DiodeKind::Zener)),

@@ -80,6 +80,7 @@ function part(raw: unknown): Part | null {
     x,
     y,
     rot: Number.isFinite(raw.rot as number) ? ((((raw.rot as number) | 0) % 4) + 4) % 4 : 0,
+    ...(raw.flip === true ? { flip: true } : {}),
     label: text(raw.label, MAX_LABEL) ?? def.prefix,
     params,
   };

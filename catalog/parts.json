@@ -337,6 +337,43 @@
    "internalNodes": 0
   },
   {
+   "type": "ctransformer",
+   "pins": [
+    {
+     "x": -40,
+     "y": -40
+    },
+    {
+     "x": -40,
+     "y": 40
+    },
+    {
+     "x": 40,
+     "y": -40
+    },
+    {
+     "x": 40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 40
+    }
+   ],
+   "params": [
+    {
+     "key": "n",
+     "def": 1
+    },
+    {
+     "key": "L1",
+     "def": 1
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
    "type": "switch",
    "pins": [
     {

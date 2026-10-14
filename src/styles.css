@@ -2542,7 +2542,7 @@ select {
 @media (max-width: 900px) {
   .quick-actions {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 6px;
     margin: 4px 0 10px;
   }
@@ -2611,4 +2611,24 @@ select {
   text-align: center;
   color: var(--muted);
   font-size: 0.8rem;
+}
+
+/* Phones: a blurred glass panel over the moving board is redrawn every frame and slows weak
+   phones down a lot. A plain, almost opaque background looks nearly the same. */
+@media (pointer: coarse) {
+  :root {
+    --glass: rgba(255, 255, 255, 0.96);
+  }
+  :root[data-theme='dark'] {
+    --glass: rgba(15, 22, 36, 0.96);
+  }
+  * {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+@media (pointer: coarse) and (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --glass: rgba(15, 22, 36, 0.96);
+  }
 }

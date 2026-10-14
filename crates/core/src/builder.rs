@@ -29,7 +29,7 @@ impl Builder {
         }
         let id = self.next_id("p");
         let label = self.next_label(kind);
-        self.doc.parts.push(Part { id: id.clone(), kind: kind.to_string(), x, y, rot, label, params: p });
+        self.doc.parts.push(Part { id: id.clone(), kind: kind.to_string(), x, y, rot, flip: false, label, params: p });
         id
     }
 

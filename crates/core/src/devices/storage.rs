@@ -245,3 +245,114 @@ impl Model for Transformer {
         self.hist = 0;
     }
 }
+
+/// Transformer with a centre-tapped secondary: one primary and two equal secondary halves, all
+/// coupled (k = 0.9999, so little leakage even at audio frequencies). Pins: primary +, primary −, secondary top, centre tap, secondary bottom.
+/// Used in push-pull amplifiers and full-wave rectifiers with two diodes.
+#[derive(Debug, Default)]
+pub struct CenterTap {
+    /// Inverse inductance matrix of the three windings.
+    g: [[f64; 3]; 3],
+    i: [f64; 3],
+    h: [f64; 3],
+    hist: u64,
+}
+
+impl CenterTap {
+    /// Winding voltages: primary, top half (top − tap), bottom half (tap − bottom).
+    #[inline]
+    fn volts(x: &[f64], io: &Io) -> [f64; 3] {
+        [io.vd(x, 0, 1), io.vd(x, 2, 3), io.vd(x, 3, 4)]
+    }
+
+    /// Admittance scale and history currents for this step (BDF2 after the first).
+    #[inline]
+    fn step(&self, dt: f64) -> (f64, [f64; 3]) {
+        if self.hist >= 1 {
+            (dt / 1.5, std::array::from_fn(|k| (2.0 * self.i[k] - 0.5 * self.h[k]) / 1.5))
+        } else {
+            (dt, self.i)
+        }
+    }
+
+    fn currents(&self, dt: f64, v: [f64; 3]) -> [f64; 3] {
+        let (c, j) = self.step(dt);
+        std::array::from_fn(|k| c * (self.g[k][0] * v[0] + self.g[k][1] * v[1] + self.g[k][2] * v[2]) + j[k])
+    }
+}
+
+/// Inverse of a symmetric 3×3 matrix.
+fn inverse3(m: [[f64; 3]; 3]) -> [[f64; 3]; 3] {
+    let c = |r0: usize, r1: usize, c0: usize, c1: usize| m[r0][c0] * m[r1][c1] - m[r0][c1] * m[r1][c0];
+    let a = [[c(1, 2, 1, 2), -c(0, 2, 1, 2), c(0, 1, 1, 2)], [-c(1, 2, 0, 2), c(0, 2, 0, 2), -c(0, 1, 0, 2)], [c(1, 2, 0, 1), -c(0, 2, 0, 1), c(0, 1, 0, 1)]];
+    let det = m[0][0] * a[0][0] + m[0][1] * a[1][0] + m[0][2] * a[2][0];
+    std::array::from_fn(|r| std::array::from_fn(|k| a[r][k] / det))
+}
+
+impl Model for CenterTap {
+    fn configure(&mut self, p: &Params) {
+        // n = N1 : N2 over the whole secondary, so each half has half the turns.
+        let n = p.num("n", 10.0).max(0.01);
+        let l1 = p.num("L1", 1.0).max(1e-9);
+        let lh = l1 / (4.0 * n * n);
+        let l = [l1, lh, lh];
+        let m: [[f64; 3]; 3] = std::array::from_fn(|r| std::array::from_fn(|k| if r == k { l[r] } else { 0.9999 * (l[r] * l[k]).sqrt() }));
+        self.g = inverse3(m);
+    }
+    fn stamp(&mut self, s: &mut Stamper, c: &Ctx, io: &mut Io) {
+        let v = Self::volts(c.x, io);
+        let i = self.currents(c.dt, v);
+        let (k, _) = self.step(c.dt);
+        let g = self.g;
+        let [p1, p2, top, tap, bot] = [io.nodes[0], io.nodes[1], io.nodes[2], io.nodes[3], io.nodes[4]];
+        let row = |w: usize| [k * g[w][0], k * g[w][1], k * g[w][2]];
+        let neg = |r: [f64; 3]| [-r[0], -r[1], -r[2]];
+        s.lin(
+            [p1, p2, top, tap, tap, bot],
+            [i[0], -i[0], i[1], -i[1], i[2], -i[2]],
+            [(p1, p2, v[0]), (top, tap, v[1]), (tap, bot, v[2])],
+            [row(0), neg(row(0)), row(1), neg(row(1)), row(2), neg(row(2))],
+        );
+    }
+    fn accept(&mut self, c: &Ctx, io: &mut Io) {
+        let v = Self::volts(c.x, io);
+        let n = self.currents(c.dt, v);
+        self.h = self.i;
+        self.i = n;
+        self.hist += 1;
+        io.cur.copy_from_slice(&[n[0], -n[0], n[1], n[2] - n[1], -n[2]]);
+    }
+    fn ac(&self, s: &mut AcStamper, w: f64, io: &Io) {
+        let [p1, p2, top, tap, bot] = [io.nodes[0], io.nodes[1], io.nodes[2], io.nodes[3], io.nodes[4]];
+        let wind = [(p1, p2), (top, tap), (tap, bot)];
+        // Y = Γ / (jω) = −j·Γ/ω
+        let k = -1.0 / w;
+        for (r, &(ra, rb)) in wind.iter().enumerate() {
+            for (cc, &(ca, cb)) in wind.iter().enumerate() {
+                let y = k * self.g[r][cc];
+                s.trans(ra, ca, cb, 0.0, y);
+                s.trans(rb, ca, cb, 0.0, -y);
+            }
+        }
+    }
+    fn limits(&self, _c: &Ctx, _io: &Io) -> Option<Issue> {
+        let i = self.i[0].abs();
+        (i > 20.0).then(|| Issue::burn("burn.transformer", &[("i", i)]))
+    }
+    fn extra(&self, _c: &Ctx, _io: &Io, out: &mut Extra) {
+        out.push(("i1", self.i[0]));
+        out.push(("i2a", self.i[1]));
+        out.push(("i2b", self.i[2]));
+    }
+    fn save(&self) -> Vec<f64> {
+        self.i.to_vec()
+    }
+    fn load(&mut self, s: &[f64]) {
+        if s.len() < 3 {
+            return;
+        }
+        self.i = [s[0], s[1], s[2]];
+        self.h = self.i;
+        self.hist = 0;
+    }
+}

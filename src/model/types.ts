@@ -14,6 +14,8 @@ export interface Part {
   y: number;
   /** Quarter turns clockwise: 0..3 */
   rot: number;
+  /** Mirrored top to bottom before turning (a transistor with its emitter on top). */
+  flip?: boolean;
   label: string;
   params: Record<string, ParamValue>;
 }
@@ -51,6 +53,11 @@ export function rotatePt(p: Pt, rot: number): Pt {
     default:
       return { x: p.x, y: p.y };
   }
+}
+
+/** Place a local point of a part: mirror it first when the part is flipped, then turn it. */
+export function orientPt(p: Pt, rot: number, flip?: boolean): Pt {
+  return rotatePt(flip ? { x: p.x, y: -p.y } : p, rot);
 }
 
 export function emptyDoc(title = ''): CircuitDoc {

@@ -100,6 +100,9 @@ pub struct Part {
     /// Quarter turns clockwise.
     #[serde(default)]
     pub rot: i32,
+    /// Mirrored top to bottom before turning.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub flip: bool,
     #[serde(default)]
     pub label: String,
     #[serde(default)]
@@ -160,7 +163,7 @@ impl CircuitDoc {
     pub fn topology_key(&self) -> String {
         let mut s = String::new();
         for p in &self.parts {
-            s.push_str(&format!("{}:{}:{}:{}:{};", p.id, p.kind, p.x, p.y, p.rot));
+            s.push_str(&format!("{}:{}:{}:{}:{}{};", p.id, p.kind, p.x, p.y, p.rot, if p.flip { "f" } else { "" }));
         }
         s.push('#');
         for w in &self.wires {

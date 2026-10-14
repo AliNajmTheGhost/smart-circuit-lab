@@ -30,6 +30,15 @@ export const SPEEDS = [
 const STORE_DOC = 'nabd.doc';
 const STORE_SETTINGS = 'nabd.settings';
 const FRAME_BUDGET_MS = 10;
+/**
+ * Phones and tablets: the simulation gets a smaller share of each frame and the board is redrawn
+ * at most about 30 times a second, so touch and scrolling stay smooth on slow lab phones.
+ */
+const LOW_POWER = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+const SIM_BUDGET_MS = LOW_POWER ? 6 : FRAME_BUDGET_MS;
+const DRAW_EVERY_MS = LOW_POWER ? 30 : 0;
+/** Advice (e.g. "this resistor is getting hot") is checked a few times a second, not every frame. */
+const NOTES_EVERY_MS = 250;
 /** Steps per call into the simulation core; small enough to keep the frame budget. */
 const BATCH = 200;
 const MAX_HISTORY = 200;
@@ -62,6 +71,8 @@ export class App {
   private listeners = new Map<EventName, Set<() => void>>();
   private staticNotes: DoctorNote[] = [];
   private lastFrame = 0;
+  private lastDraw = 0;
+  private lastNotes = 0;
   private stepDebt = 0;
 
   constructor() {
@@ -314,7 +325,7 @@ export class App {
           newDamage = true;
         }
         for (const h of this.stepHooks) h(this.engine);
-        if (performance.now() - start > FRAME_BUDGET_MS) {
+        if (performance.now() - start > SIM_BUDGET_MS) {
           this.stepDebt = Math.min(this.stepDebt, 1);
           break;
         }
@@ -324,7 +335,12 @@ export class App {
         this.emit('doc');
       }
     }
-    this.refreshNotes();
+    if (now - this.lastNotes >= NOTES_EVERY_MS) {
+      this.lastNotes = now;
+      this.refreshNotes();
+    }
+    if (now - this.lastDraw < DRAW_EVERY_MS) return;
+    this.lastDraw = now;
     this.emit('frame');
   }
 

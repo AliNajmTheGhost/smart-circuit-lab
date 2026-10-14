@@ -28,12 +28,12 @@ export function welcomeSkipped(): boolean {
 
 /** The start screen: what to do first, in three big choices. */
 export function showWelcome(actions: WelcomeActions): void {
-  const cards: [string, string, string, string, keyof WelcomeActions][] = [];
+  // A new circuit comes first: in the lab most students build the experiment from the book themselves.
+  const cards: [string, string, string, string, keyof WelcomeActions][] = [['new', 'new', 'wNew', 'wNewSub', 'newCircuit']];
   if (actions.resume) cards.push(['resume', 'restart', 'wResume', 'wResumeSub', 'resume']);
   cards.push(
-    ['lessons', 'book', 'wLessons', 'wLessonsSub', 'lessons'],
     ['examples', 'bulb', 'wExamples', 'wExamplesSub', 'examples'],
-    ['new', 'new', 'wNew', 'wNewSub', 'newCircuit'],
+    ['lessons', 'book', 'wLessons', 'wLessonsSub', 'lessons'],
   );
   let skip = welcomeSkipped();
   modal(
