@@ -141,7 +141,7 @@ export function routeWire(doc: CircuitDoc, a: Pt, b: Pt, horizontalFirst?: boole
  * so the simulator can keep running while a student turns a knob or flips a switch.
  */
 export function topologyKey(doc: CircuitDoc): string {
-  const parts = doc.parts.map((p) => `${p.id}:${p.type}:${p.x}:${p.y}:${p.rot}`).join(';');
+  const parts = doc.parts.map((p) => `${p.id}:${p.type}:${p.x}:${p.y}:${p.rot}${p.flip ? 'f' : ''}`).join(';');
   const wires = doc.wires.map((w) => `${keyOf(w.a)}-${keyOf(w.b)}`).join(';');
   return `${parts}#${wires}`;
 }
@@ -156,6 +156,11 @@ export class Builder {
     const p = makePart(this.doc, type, x, y, rot, params);
     this.doc.parts.push(p);
     return p.id;
+  }
+  /** Mirror a part top to bottom. */
+  flip(id: string): this {
+    this.doc.parts.find((q) => q.id === id)!.flip = true;
+    return this;
   }
   pin(id: string, i: number): Pt {
     const p = this.doc.parts.find((q) => q.id === id);

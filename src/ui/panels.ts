@@ -247,6 +247,7 @@ export class Panels {
       e.preventDefault();
       this.board.duplicateSelected();
     } else if (!ctrl && (k === 'r' || k === 'ق')) this.board.rotateSelected();
+    else if (!ctrl && (k === 'f' || k === 'ب')) this.board.flipSelected();
     else if (k === 'delete' || k === 'backspace') this.board.deleteSelected();
     else if (k === 'escape') {
       if (!this.board.cancel()) app.select(null);

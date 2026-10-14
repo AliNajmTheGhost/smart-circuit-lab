@@ -9,8 +9,12 @@ const P = (d: string, extra = ''): string => `<path d="${d}"${extra}/>`;
 const C = (cx: number, cy: number, r: number, extra = ''): string => `<circle cx="${cx}" cy="${cy}" r="${r}"${extra}/>`;
 /** Rotation of the part being drawn, so text inside a symbol can stay upright. */
 let turn = 0;
+/** Whether the part being drawn is mirrored, so its text can be mirrored back. */
+let mirrored = false;
 const T = (x: number, y: number, s: string, extra = ''): string => {
-  const up = turn ? ` transform="rotate(${-turn * 90} ${x} ${y - 5})"` : '';
+  const cy = y - 5;
+  const parts = [mirrored ? `translate(0 ${2 * cy}) scale(1 -1)` : '', turn ? `rotate(${-turn * 90} ${x} ${cy})` : ''].filter(Boolean);
+  const up = parts.length ? ` transform="${parts.join(' ')}"` : '';
   return `<text x="${x}" y="${y}" class="sym-text"${extra}${up}>${s}</text>`;
 };
 
@@ -93,8 +97,9 @@ function icBox(x0: number, y0: number, w: number, h: number, title: string): str
 }
 
 /** SVG for a part in its own coordinates (before rotation). Colours come from CSS. */
-export function symbolSvg(type: string, params: Record<string, ParamValue>, std: SymbolStd, rot = 0): string {
+export function symbolSvg(type: string, params: Record<string, ParamValue>, std: SymbolStd, rot = 0, flip = false): string {
   turn = rot % 4;
+  mirrored = flip;
   switch (type) {
     case 'resistor':
       return leads() + resistorBody(std);
@@ -370,6 +375,22 @@ export function symbolSvg(type: string, params: Record<string, ParamValue>, std:
         L(3, -28, 3, 28) +
         C(-22, -30, 2.5, ' class="fill"') +
         C(22, -30, 2.5, ' class="fill"')
+      );
+    case 'ctransformer':
+      return (
+        P('M-40 -40 H-14 V-24', ' fill="none"') +
+        P('M-40 40 H-14 V24', ' fill="none"') +
+        P('M-14 -24 a6 6 0 0 0 0 12 a6 6 0 0 0 0 12 a6 6 0 0 0 0 12 a6 6 0 0 0 0 12', ' fill="none"') +
+        P('M40 -40 H14 V-24', ' fill="none"') +
+        P('M40 40 H14 V24', ' fill="none"') +
+        L(14, 0, 40, 0) +
+        P('M14 -24 a6 6 0 0 1 0 12 a6 6 0 0 1 0 12 a6 6 0 0 1 0 12 a6 6 0 0 1 0 12', ' fill="none"') +
+        C(14, 0, 2.5, ' class="fill"') +
+        L(-3, -28, -3, 28) +
+        L(3, -28, 3, 28) +
+        C(-22, -30, 2.5, ' class="fill"') +
+        C(22, -30, 2.5, ' class="fill"') +
+        T(30, -5, 'CT', ' class="sym-text tiny"')
       );
     case 'scr':
       return diodeBody(L(10, -10, 10, 10, ' class="plate"')) + P('M10 5 L20 20 V40', ' fill="none"');

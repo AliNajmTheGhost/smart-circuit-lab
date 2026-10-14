@@ -31,6 +31,7 @@ const ICON: Record<string, string> = {
   minus: 'M5 12h14',
   fit: 'M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5',
   rotate: 'M20 12a8 8 0 1 1-2.3-5.7 M20 4v5h-5',
+  flip: 'M3 12h18 M12 3l-4 5h8z M12 21l-4-5h8z',
   trash: 'M4 7h16 M9 7V4h6v3 M6 7l1 13h10l1-13',
   copy: 'M8 8h12v12H8z M4 16V4h12',
   wrench: 'M14 6a4 4 0 0 0 5 5l-9 9-3-3 9-9a4 4 0 0 0-2-2z',

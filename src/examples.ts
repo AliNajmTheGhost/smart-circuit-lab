@@ -389,6 +389,51 @@ export const EXAMPLES: Example[] = [
     },
   },
   {
+    id: 'push-pull',
+    grade: 2,
+    ar: 'مكبر الدفع والسحب (محولتان بنقطة وسطية)',
+    en: 'Push-pull amplifier (two centre-tapped transformers)',
+    scopeWindow: 0.001,
+    build() {
+      const b = new Builder('مكبر الدفع والسحب');
+      b.add('funcgen', 0, 40, 0, { wave: 'sine', Vp: 1, f: 3300, r: 50 });
+      b.add('ground', 0, 80);
+      b.add('probe', 0, 0, 0, { ch: '2' });
+      // T1 splits the input into two opposite halves, one for each transistor base.
+      b.add('ctransformer', 160, 40, 0, { n: 0.5, L1: 0.1 });
+      // Base bias at the centre tap: 10 V × 470 / (10 k + 470) ≈ 0.45 V.
+      b.add('resistor', 240, -160, 1, { R: 10000 });
+      b.add('resistor', 240, 80, 1, { R: 470 });
+      b.add('ground', 240, 120);
+      b.add('npn', 320, -80, 0, { beta: 100, Pmax: 10 });
+      b.flip(b.add('npn', 320, 160, 0, { beta: 100, Pmax: 10 }));
+      b.add('resistor', 340, 0, 1, { R: 1, Pmax: 2 });
+      b.add('resistor', 340, 80, 1, { R: 1, Pmax: 2 });
+      b.add('ground', 400, 40);
+      // T2 turned round: its centre tap is on the transistor side and goes to +10 V.
+      b.add('ctransformer', 520, 40, 2, { n: 0.25, L1: 0.05 });
+      b.add('resistor', 640, 40, 1, { R: 8, Pmax: 5 });
+      b.add('ground', 640, 80);
+      b.add('probe', 640, 0, 0, { ch: '1' });
+      b.add('battery', 720, -160, 0, { V: 10 });
+      b.add('ground', 720, -120);
+      b.path(P(0, 0), P(120, 0));
+      b.path(P(0, 80), P(120, 80));
+      b.path(P(200, 0), P(200, -80), P(280, -80));
+      b.path(P(200, 80), P(200, 160), P(280, 160));
+      b.path(P(200, 40), P(240, 40));
+      b.path(P(240, -120), P(240, 40));
+      b.path(P(720, -200), P(720, -240), P(240, -240), P(240, -200));
+      b.path(P(340, 40), P(400, 40));
+      b.path(P(340, -120), P(480, -120), P(480, 0));
+      b.path(P(340, 200), P(480, 200), P(480, 80));
+      b.path(P(480, 40), P(440, 40), P(440, -240));
+      b.path(P(560, 0), P(640, 0));
+      b.path(P(560, 80), P(640, 80));
+      return b.done();
+    },
+  },
+  {
     id: '555',
     grade: 2,
     ar: 'المؤقت 555: متعدد الاهتزاز الحر',

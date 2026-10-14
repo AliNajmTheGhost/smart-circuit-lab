@@ -142,6 +142,7 @@ export class Inspector {
       <div class="quick-actions">
         <button class="btn" data-do="move">${icon('fit')}<span>${t('move')}</span></button>
         <button class="btn" data-do="rotate">${icon('rotate')}<span>${t('rotate')}</span></button>
+        <button class="btn" data-do="flip" title="${t('flipTip')}">${icon('flip')}<span>${t('flip')}</span></button>
         <button class="btn" data-do="duplicate">${icon('copy')}<span>${t('duplicate')}</span></button>
         <button class="btn danger" data-do="delete">${icon('trash')}<span>${t('delete')}</span></button>
       </div>
@@ -153,6 +154,7 @@ export class Inspector {
       <div class="actions">
         ${canTrace(p.type) ? `<button class="btn" data-do="curve">${icon('scope')}<span>${t('traceCurve')}</span></button>` : ''}
         <button class="btn icon-only" data-do="rotate" title="${t('rotate')} (R)">${icon('rotate')}</button>
+        <button class="btn icon-only" data-do="flip" title="${t('flipTip')} (F)">${icon('flip')}</button>
         <button class="btn icon-only" data-do="duplicate" title="${t('duplicate')} (Ctrl+D)">${icon('copy')}</button>
         <button class="btn icon-only danger" data-do="delete" title="${t('delete')} (Delete)">${icon('trash')}</button>
       </div>`;
@@ -169,6 +171,7 @@ export class Inspector {
         if (a === 'curve' && p) this.scope.showIv(p);
         if (a === 'move' && p) this.board.startMoveMode(p.id);
         if (a === 'rotate') this.board.rotateSelected();
+        if (a === 'flip') this.board.flipSelected();
         if (a === 'duplicate') this.board.duplicateSelected();
         if (a === 'delete') this.board.deleteSelected();
         if (a === 'repair' && p) this.app.repair(p.id);
@@ -308,6 +311,14 @@ export class Inspector {
           [t('secondaryV'), () => fmt(node(2) - node(3), 'V')],
           [t('primaryI'), () => fmt(x('i1'), 'A')],
           [t('secondaryI'), () => fmt(x('i2'), 'A')],
+        ];
+      case 'ctransformer':
+        return [
+          [t('primaryV'), () => fmt(node(0) - node(1), 'V')],
+          [t('secondaryV'), () => fmt(node(2) - node(4), 'V')],
+          [t('halfTopV'), () => fmt(node(2) - node(3), 'V')],
+          [t('halfBottomV'), () => fmt(node(3) - node(4), 'V')],
+          [t('primaryI'), () => fmt(x('i1'), 'A')],
         ];
       case 'scr':
       case 'triac':

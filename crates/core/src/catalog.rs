@@ -72,7 +72,8 @@ impl Catalog {
     /// Where pin `i` of a placed part is on the board.
     pub fn pin_world(&self, part: &Part, i: usize) -> Pt {
         let pin = &self.def(&part.kind).pins[i];
-        let r = rotate(Pt::new(pin.x, pin.y), part.rot);
+        let y = if part.flip { -pin.y } else { pin.y };
+        let r = rotate(Pt::new(pin.x, y), part.rot);
         Pt::new(part.x + r.x, part.y + r.y)
     }
 

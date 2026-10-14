@@ -1,7 +1,7 @@
 import { t } from '../i18n';
 import { insertIntoWires, makePart, newId, routeWire } from '../model/docops';
 import { defOf, pinWorld } from '../model/library';
-import { GRID, keyOf, rotatePt, snap, type CircuitDoc, type Part, type Pt, type Wire } from '../model/types';
+import { GRID, keyOf, orientPt, rotatePt, snap, type CircuitDoc, type Part, type Pt, type Wire } from '../model/types';
 import { fmt } from '../units';
 import type { App } from './app';
 import { symbolSvg } from './symbols';
@@ -272,7 +272,7 @@ export class Board {
     const c = [
       { x: b.x, y: b.y },
       { x: b.x + b.w, y: b.y + b.h },
-    ].map((q) => rotatePt(q, p.rot));
+    ].map((q) => orientPt(q, p.rot, p.flip));
     const x = Math.min(c[0].x, c[1].x);
     const y = Math.min(c[0].y, c[1].y);
     return { x: p.x + x, y: p.y + y, w: Math.abs(c[1].x - c[0].x), h: Math.abs(c[1].y - c[0].y) };
@@ -756,6 +756,20 @@ export class Board {
     });
   }
 
+  /** Mirror the selected part top to bottom, e.g. a transistor with its emitter on top. */
+  flipSelected(): void {
+    const s = this.app.selection;
+    if (s?.kind !== 'part') return;
+    this.app.commit((d) => {
+      const p = d.parts.find((q) => q.id === s.id);
+      if (!p) return;
+      const att = attachments(d, p);
+      if (p.flip) delete p.flip;
+      else p.flip = true;
+      followPins(d, p, att);
+    });
+  }
+
   deleteSelected(): void {
     const app = this.app;
     if (!app.selCount) return;
@@ -780,6 +794,7 @@ export class Board {
     app.commit((d) => {
       for (const src of srcParts) {
         const p = makePart(d, src.type, src.x + off, src.y + off, src.rot, { ...src.params });
+        if (src.flip) p.flip = true;
         d.parts.push(p);
         newParts.push(p.id);
       }
@@ -847,7 +862,7 @@ export class Board {
           o = p.rot % 2 === 1 ? { x: 64, y: 20 } : rotatePt(def.readoutAt!, p.rot % 2);
         } else if (p.type === 'psu') o = p.rot % 2 === 0 ? { x: 92, y: 18 } : { x: 0, y: 52 };
         else if (p.type === 'probe') o = rotatePt({ x: 0, y: -31 }, p.rot);
-        else if (def.readoutAt) o = rotatePt(def.readoutAt, p.rot);
+        else if (def.readoutAt) o = orientPt(def.readoutAt, p.rot, p.flip);
         if (o) {
           if (lcd) readout += `<rect class="lcd" x="${num(p.x + o.x - lcd / 2)}" y="${num(p.y + o.y - 10)}" width="${lcd}" height="18" rx="3"/>`;
           const txt = p.type === 'probe' ? `CH${escapeXml(p.params.ch)}` : '';
@@ -868,9 +883,9 @@ export class Board {
           }
         }
         return `<g class="${cls}" data-id="${escapeXml(p.id)}">
-          <g transform="translate(${num(p.x)} ${num(p.y)}) rotate(${num(p.rot) * 90})">
+          <g transform="translate(${num(p.x)} ${num(p.y)}) rotate(${num(p.rot) * 90})${p.flip ? ' scale(1 -1)' : ''}">
             <rect class="hit" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}"/>
-            <g class="sym">${symbolSvg(p.type, p.params, std, p.rot)}</g>
+            <g class="sym">${symbolSvg(p.type, p.params, std, p.rot, !!p.flip)}</g>
           </g>${label}${readout}${smoke}</g>`;
       })
       .join('');
@@ -997,7 +1012,7 @@ export class Board {
       if (!r) continue;
       const node = net.pointNode.get(keyOf(w.a));
       const c = node === undefined ? '' : colorFor(e.volt(node));
-      r.line.style.stroke = c;
+      if (r.line.style.stroke !== c) r.line.style.stroke = c;
       this.animateFlow(r.flow, wireI?.get(w.id) ?? 0, moving ? dt : 0, !!wireI);
     }
 
@@ -1053,10 +1068,11 @@ export class Board {
   private animateFlow(el: SVGElement, current: number, dt: number, show: boolean): void {
     const a = Math.abs(current);
     if (!show || a < 1e-6) {
-      el.style.opacity = '0';
+      if (el.style.opacity !== '0') el.style.opacity = '0';
       return;
     }
-    el.style.opacity = '1';
+    if (el.style.opacity !== '1') el.style.opacity = '1';
+    if (dt === 0) return;
     const speed = Math.sign(current) * Math.min(260, 45 * Math.log10(a / 1e-6));
     const off = (this.offsets.get(el) ?? 0) - speed * dt;
     this.offsets.set(el, off % 1000);

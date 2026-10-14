@@ -1,5 +1,5 @@
 import { fmtShort } from '../units';
-import { rotatePt, type ParamValue, type Part, type Pt } from './types';
+import { orientPt, type ParamValue, type Part, type Pt } from './types';
 
 export type Category = 'sources' | 'basic' | 'semis' | 'output' | 'logic' | 'ics' | 'meters';
 
@@ -361,6 +361,31 @@ export const PARTS: PartDef[] = [
       en: 'Secondary voltage = primary voltage ÷ turns ratio. Works on AC only.',
     },
     valueText: (p) => `${num(p, 'n')}:1`,
+  },
+  {
+    type: 'ctransformer',
+    ar: 'محولة ذات نقطة وسطية',
+    en: 'Centre-tapped transformer',
+    cat: 'basic',
+    prefix: 'T',
+    pins: [
+      { x: -40, y: -40, ar: 'الابتدائي 1', en: 'Primary 1' },
+      { x: -40, y: 40, ar: 'الابتدائي 2', en: 'Primary 2' },
+      { x: 40, y: -40, ar: 'الثانوي (الطرف العلوي)', en: 'Secondary top' },
+      { x: 40, y: 0, ar: 'النقطة الوسطية', en: 'Centre tap' },
+      { x: 40, y: 40, ar: 'الثانوي (الطرف السفلي)', en: 'Secondary bottom' },
+    ],
+    params: [
+      { key: 'n', ar: 'نسبة اللفات N1:N2 (الثانوي كله)', en: 'Turns ratio N1:N2 (whole secondary)', unit: '', def: 1, min: 0.01 },
+      { key: 'L1', ar: 'محاثة الملف الابتدائي', en: 'Primary inductance', unit: 'H', def: 1, min: 1e-6 },
+    ],
+    box: { x: -40, y: -46, w: 80, h: 92 },
+    labelAt: { x: 0, y: -54 },
+    desc: {
+      ar: 'خمسة أطراف: النقطة الوسطية تقسم الثانوي إلى نصفين متساويين بإشارتين متعاكستين. تستخدم في مكبر الدفع والسحب وفي التقويم الموجي الكامل بثنائيين. لوضع النقطة الوسطية على الجهة الأخرى (مثل T2) دوّر المحولة مرتين.',
+      en: 'Five pins: the centre tap splits the secondary into two equal, opposite halves. Used in push-pull amplifiers and two-diode full-wave rectifiers. Rotate twice to put the tap on the other side.',
+    },
+    valueText: (p) => `${num(p, 'n')}:1 CT`,
   },
   {
     type: 'switch',
@@ -1243,7 +1268,7 @@ export const isGate = (type: string): boolean => ['and', 'or', 'not', 'nand', 'n
 
 export function pinWorld(part: Part, i: number): Pt {
   const pin = defOf(part.type).pins[i];
-  const r = rotatePt(pin, part.rot);
+  const r = orientPt(pin, part.rot, part.flip);
   return { x: part.x + r.x, y: part.y + r.y };
 }
 
