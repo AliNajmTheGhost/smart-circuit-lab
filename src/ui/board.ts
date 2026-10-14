@@ -1,6 +1,7 @@
 import { t } from '../i18n';
 import { insertIntoWires, makePart, newId, routeWire } from '../model/docops';
 import { defOf, pinWorld } from '../model/library';
+import { logicNodes, logicState, type LogicNode, type LogicState } from './logic-nodes';
 import { GRID, keyOf, orientPt, rotatePt, snap, type CircuitDoc, type Part, type Pt, type Wire } from '../model/types';
 import { fmt } from '../units';
 import type { App } from './app';
@@ -23,6 +24,8 @@ interface PartRefs {
 interface WireRefs {
   line: SVGLineElement;
   flow: SVGLineElement;
+  /** Logic state last drawn on a digital wire ('' for analog wires). */
+  state?: string;
 }
 
 type Drag =
@@ -137,6 +140,11 @@ export class Board {
   private hover: Pt | null = null;
   private hoverWorld: Pt = { x: 0, y: 0 };
   private neutral: [number, number, number] = [120, 130, 140];
+  private vPos: [number, number, number] = [16, 185, 129];
+  private vNeg: [number, number, number] = [244, 63, 94];
+  private logicColor: Record<LogicState, string> = { '1': '#10b981', '0': '#3b82f6', Z: '#f59e0b', X: '#ef4444' };
+  /** Digital nodes of the current engine (its wiring never changes, so this is worked out once). */
+  private logic: { engine: unknown; nodes: Map<number, LogicNode> } | null = null;
   private lastFrame = 0;
 
   constructor(
@@ -151,9 +159,13 @@ export class Board {
         <pattern id="grid" width="${GRID}" height="${GRID}" patternUnits="userSpaceOnUse">
           <circle cx="0" cy="0" r="1.1" class="griddot"/>
         </pattern>
+        <pattern id="gridmajor" width="${GRID * 5}" height="${GRID * 5}" patternUnits="userSpaceOnUse">
+          <path d="M0 0H${GRID * 5}M0 0V${GRID * 5}" class="gridline"/>
+        </pattern>
         <filter id="halo" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="6"/></filter>
       </defs>
-      <rect class="gridbg" x="0" y="0" width="100%" height="100%" fill="url(#grid)"/>
+      <rect class="gridbg" x="0" y="0" width="100%" height="100%" fill="url(#gridmajor)"/>
+      <rect class="gridbg minor" x="0" y="0" width="100%" height="100%" fill="url(#grid)"/>
       <g class="vp"><g class="wires"></g><g class="parts"></g><g class="flows"></g><g class="over"></g><g class="ghost"></g></g>`;
     host.appendChild(this.svg);
     this.vp = this.svg.querySelector('.vp')!;
@@ -198,16 +210,37 @@ export class Board {
   }
 
   private readTheme(): void {
-    const v = getComputedStyle(document.documentElement).getPropertyValue('--wire').trim();
-    if (v.startsWith('#')) this.neutral = hexToRgb(v);
+    const css = getComputedStyle(document.documentElement);
+    const hex = (name: string) => {
+      const v = css.getPropertyValue(name).trim();
+      return v.startsWith('#') ? v : null;
+    };
+    const rgb = (name: string, fallback: [number, number, number]) => {
+      const v = hex(name);
+      return v ? hexToRgb(v) : fallback;
+    };
+    this.neutral = rgb('--wire', this.neutral);
+    this.vPos = rgb('--v-pos', this.vPos);
+    this.vNeg = rgb('--v-neg', this.vNeg);
+    for (const [s, name] of [['1', '--logic-1'], ['0', '--logic-0'], ['Z', '--logic-z'], ['X', '--logic-x']] as const) {
+      this.logicColor[s] = hex(name) ?? this.logicColor[s];
+    }
+  }
+
+  private logicNodesOf(e: App['engine']): Map<number, LogicNode> {
+    if (this.logic?.engine !== e) this.logic = { engine: e, nodes: logicNodes(this.app.doc, e.net) };
+    return this.logic.nodes;
   }
 
   // ------------------------------------------------------------ coordinates
 
   private applyView(): void {
     this.vp.setAttribute('transform', `translate(${this.pan.x} ${this.pan.y}) scale(${this.zoom})`);
-    const pat = this.svg.querySelector('#grid')!;
-    pat.setAttribute('patternTransform', `translate(${this.pan.x} ${this.pan.y}) scale(${this.zoom})`);
+    const t = `translate(${this.pan.x} ${this.pan.y}) scale(${this.zoom})`;
+    this.svg.querySelector('#grid')!.setAttribute('patternTransform', t);
+    this.svg.querySelector('#gridmajor')!.setAttribute('patternTransform', t);
+    // Zoomed far out, the small dots would only blur into a grey haze: keep just the major lines.
+    this.svg.classList.toggle('far', this.zoom < 0.55);
   }
 
   private screen(e: { clientX: number; clientY: number }): Pt {
@@ -951,6 +984,8 @@ export class Board {
       const y = Math.min(d.start.y, d.cur.y);
       out.push(`<rect class="marquee" x="${x}" y="${y}" width="${Math.abs(d.cur.x - d.start.x)}" height="${Math.abs(d.cur.y - d.start.y)}"/>`);
     }
+    const wiring = (d?.kind === 'wire' && d.moved) || !!this.pendingWire;
+    if (wiring) out.push(this.snapRings());
     if (d?.kind === 'wire' && d.moved) {
       const w = this.hoverWorld;
       const end = this.hover ?? { x: snap(w.x), y: snap(w.y) };
@@ -961,8 +996,28 @@ export class Board {
       out.push(this.previewWire(this.pendingWire, end, this.pendingDir));
       out.push(`<circle class="pinhover" cx="${this.pendingWire.x}" cy="${this.pendingWire.y}" r="7"/>`);
     }
-    if (this.hover) out.push(`<circle class="pinhover" cx="${this.hover.x}" cy="${this.hover.y}" r="7"/>`);
+    if (this.hover) {
+      // While a wire is being drawn the pin it will snap to gets a bold ring, sized for a finger.
+      const r = wiring ? Math.max(9, 13 / this.zoom) : 7;
+      out.push(`<circle class="pinhover${wiring ? ' snap' : ''}" cx="${this.hover.x}" cy="${this.hover.y}" r="${num(r)}"/>`);
+    }
     this.gOver.innerHTML = out.join('');
+  }
+
+  /** Faint rings on the pins near the pointer while wiring, so the student sees where a wire can go. */
+  private snapRings(): string {
+    const w = this.hoverWorld;
+    const near = 90 / this.zoom;
+    const r = Math.max(6, 8 / this.zoom);
+    const out: string[] = [];
+    for (const p of this.app.doc.parts) {
+      for (let i = 0; i < defOf(p.type).pins.length; i++) {
+        const q = pinWorld(p, i);
+        if (Math.abs(q.x - w.x) > near || Math.abs(q.y - w.y) > near) continue;
+        out.push(`<circle class="snapring" cx="${q.x}" cy="${q.y}" r="${num(r)}"/>`);
+      }
+    }
+    return out.join('');
   }
 
   private previewWire(a: Pt, b: Pt, hFirst?: boolean): string {
@@ -998,21 +1053,28 @@ export class Board {
     let vmax = 1;
     const x = e.x;
     for (let i = 0; i < x.length; i++) vmax = Math.max(vmax, Math.abs(x[i]));
-    const hot: [number, number, number] = [224, 83, 61];
-    const cold: [number, number, number] = [59, 125, 216];
+    // Analog: grey at 0 V, greener as it rises, rosier as it falls below ground.
     const colorFor = (v: number): string => {
       if (!app.showVolt) return '';
       const k = Math.min(1, Math.abs(v) / vmax);
-      return mix(this.neutral, v >= 0 ? hot : cold, k * 0.95);
+      return mix(this.neutral, v >= 0 ? this.vPos : this.vNeg, k * 0.95);
     };
+    // Digital: one clear colour per logic state.
+    const logic = app.showVolt ? this.logicNodesOf(e) : null;
 
     const wireI = app.showCurrent ? e.wireCurrents(app.doc) : null;
     for (const w of app.doc.wires) {
       const r = this.wireRefs.get(w.id);
       if (!r) continue;
       const node = net.pointNode.get(keyOf(w.a));
-      const c = node === undefined ? '' : colorFor(e.volt(node));
+      const info = node === undefined ? undefined : logic?.get(node);
+      const state = info ? logicState(info, e.volt(node!)) : '';
+      const c = node === undefined ? '' : state ? this.logicColor[state] : colorFor(e.volt(node));
       if (r.line.style.stroke !== c) r.line.style.stroke = c;
+      if (r.state !== state) {
+        r.state = state;
+        r.line.dataset.logic = state;
+      }
       this.animateFlow(r.flow, wireI?.get(w.id) ?? 0, moving ? dt : 0, !!wireI);
     }
 

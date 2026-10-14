@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
-    <meta name="theme-color" content="#0b1220" />
+    <meta name="theme-color" content="#0b0f19" />
     <meta name="description" content="مختبر الدوائر الذكية (Smart Circuit Lab): نبض: مختبر محاكاة الدوائر الكهربائية والإلكترونية لطلاب التعليم المهني" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="./manifest.webmanifest" />
@@ -15,7 +15,7 @@
       body {
         margin: 0;
         height: 100%;
-        background: #070b14;
+        background: #0b0f19;
       }
       #splash {
         position: fixed;
@@ -26,7 +26,7 @@
         color: #e5ecf6;
         font-family: 'Readex Pro', 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
         background:
-          radial-gradient(60% 50% at 50% 42%, rgba(45, 212, 191, 0.16), transparent 70%),
+          radial-gradient(60% 50% at 50% 42%, rgba(56, 189, 248, 0.14), transparent 70%),
           linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px) 0 0 / 28px 28px,
           linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px) 0 0 / 28px 28px,
           #070b14;
@@ -68,10 +68,10 @@
         stroke-width: 3;
       }
       .sp-trace {
-        stroke: #2dd4bf;
+        stroke: #38bdf8;
         stroke-width: 4;
         stroke-dasharray: 90 520;
-        filter: drop-shadow(0 0 6px rgba(45, 212, 191, 0.9));
+        filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.9));
         animation: sp-run 1.7s cubic-bezier(0.5, 0, 0.3, 1) infinite;
       }
       @keyframes sp-run {
@@ -89,7 +89,7 @@
         font-weight: 700;
         line-height: 1.35;
         letter-spacing: -0.01em;
-        background: linear-gradient(180deg, #ffffff 20%, #99f6e4 100%);
+        background: linear-gradient(180deg, #ffffff 20%, #bae6fd 100%);
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent;
@@ -99,7 +99,7 @@
         font-family: 'IBM Plex Mono', ui-monospace, monospace;
         font-size: 13px;
         letter-spacing: 0.5em;
-        color: #5eead4;
+        color: #7dd3fc;
         margin-inline-start: 0.5em;
         animation: sp-rise 0.9s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) both;
       }
@@ -134,8 +134,8 @@
         height: 100%;
         width: 4%;
         border-radius: inherit;
-        background: linear-gradient(90deg, #2dd4bf, #a7f3d0);
-        box-shadow: 0 0 12px rgba(45, 212, 191, 0.7);
+        background: linear-gradient(90deg, #0ea5e9, #7dd3fc);
+        box-shadow: 0 0 12px rgba(56, 189, 248, 0.7);
         transition: width 0.35s ease;
       }
       .sp-row {
