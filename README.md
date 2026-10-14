@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/AliNajmTheGhost/smart-circuit-lab/releases/latest"><b>Download</b></a> ·
+  <a href="https://github.com/AliNajmTheGhost/smart-circuit-lab/releases/latest"><b>⬇ Download (Windows EXE · Android APK)</b></a> ·
   <a href="#install">Install</a> ·
   <a href="#for-schools-and-universities">For schools</a> ·
   <a href="README.ar.md">العربية</a>

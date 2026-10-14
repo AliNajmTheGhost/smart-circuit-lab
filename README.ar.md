@@ -6,6 +6,10 @@
 
 إعداد: **المهندس علي نجم**. [English](README.md)
 
+<p align="center">
+  <a href="https://github.com/AliNajmTheGhost/smart-circuit-lab/releases/latest"><b>⬇ تنزيل النسخة الأخيرة (ويندوز EXE وأندرويد APK)</b></a>
+</p>
+
 ## التحميل والتثبيت
 
 حمّل الملفات من [صفحة الإصدارات](https://github.com/AliNajmTheGhost/smart-circuit-lab/releases/latest).
