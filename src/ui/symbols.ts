@@ -394,6 +394,15 @@ export function symbolSvg(type: string, params: Record<string, ParamValue>, std:
       );
     case 'scr':
       return diodeBody(L(10, -10, 10, 10, ' class="plate"')) + P('M10 5 L20 20 V40', ' fill="none"');
+    case 'diac':
+      return (
+        L(-40, 0, -10, 0) +
+        L(10, 0, 40, 0) +
+        L(-10, -15, -10, 15, ' class="plate"') +
+        L(10, -15, 10, 15, ' class="plate"') +
+        `<polygon class="fill" points="-10,-14 -10,-1 10,-7.5"/>` +
+        `<polygon class="fill" points="10,1 10,14 -10,7.5"/>`
+      );
     case 'triac':
       return (
         L(-40, 0, -10, 0) +

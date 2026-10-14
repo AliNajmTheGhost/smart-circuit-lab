@@ -5,6 +5,7 @@ import { logicNodes, logicState, type LogicNode, type LogicState } from './logic
 import { GRID, keyOf, orientPt, rotatePt, snap, type CircuitDoc, type Part, type Pt, type Wire } from '../model/types';
 import { fmt } from '../units';
 import type { App } from './app';
+import { icon } from './dom';
 import { symbolSvg } from './symbols';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -146,6 +147,10 @@ export class Board {
   /** Digital nodes of the current engine (its wiring never changes, so this is worked out once). */
   private logic: { engine: unknown; nodes: Map<number, LogicNode> } | null = null;
   private lastFrame = 0;
+  /** Small bar of actions that floats over the selected part. */
+  private ctxBar!: HTMLElement;
+  /** The ⚙ button on that bar: show the part's properties (the phone opens its sheet). */
+  onProperties?: () => void;
 
   constructor(
     private app: App,
@@ -178,6 +183,8 @@ export class Board {
     this.hint.className = 'board-hint';
     this.hint.hidden = true;
     host.appendChild(this.hint);
+    this.ctxBar = this.makeCtxBar();
+    host.appendChild(this.ctxBar);
 
     this.readTheme();
     // Wire colours come from the theme: follow both the device setting and the in-app switch.
@@ -189,8 +196,14 @@ export class Board {
 
     this.svg.addEventListener('pointerdown', (e) => this.down(e));
     this.svg.addEventListener('pointermove', (e) => this.move(e));
-    this.svg.addEventListener('pointerup', (e) => this.up(e));
-    this.svg.addEventListener('pointercancel', (e) => this.up(e, true));
+    this.svg.addEventListener('pointerup', (e) => {
+      this.up(e);
+      this.placeCtxBar();
+    });
+    this.svg.addEventListener('pointercancel', (e) => {
+      this.up(e, true);
+      this.placeCtxBar();
+    });
     this.svg.addEventListener('pointerleave', () => {
       this.hover = null;
       this.drawOverlay();
@@ -201,6 +214,7 @@ export class Board {
     app.on('doc', () => this.render());
     app.on('select', () => this.render());
     app.on('mode', () => {
+      this.placeCtxBar();
       this.pendingWire = null;
       this.updateHint();
       this.drawGhost();
@@ -234,13 +248,74 @@ export class Board {
 
   // ------------------------------------------------------------ coordinates
 
+  private makeCtxBar(): HTMLElement {
+    const bar = document.createElement('div');
+    bar.className = 'ctxbar';
+    bar.hidden = true;
+    const btn = (act: string, ic: string, label: string) =>
+      `<button type="button" data-ctx="${act}" title="${label}" aria-label="${label}">${icon(ic)}</button>`;
+    bar.innerHTML =
+      btn('rotate', 'rotate', `${t('rotate')} (R)`) +
+      btn('flip', 'flip', `${t('flipTip')} (F)`) +
+      btn('duplicate', 'copy', `${t('duplicate')} (Ctrl+D)`) +
+      btn('props', 'props', t('props')) +
+      `<span class="ctx-sep"></span>` +
+      btn('delete', 'trash', `${t('delete')} (Delete)`);
+    // The bar sits on the board: keep its taps away from the board's own pointer handling.
+    bar.addEventListener('pointerdown', (e) => e.stopPropagation());
+    bar.addEventListener('click', (e) => {
+      const b = (e.target as Element).closest<HTMLElement>('[data-ctx]');
+      if (!b) return;
+      const act = b.dataset.ctx;
+      if (act === 'rotate') this.rotateSelected();
+      if (act === 'flip') this.flipSelected();
+      if (act === 'duplicate') this.duplicateSelected();
+      if (act === 'delete') this.deleteSelected();
+      if (act === 'props') this.onProperties?.();
+    });
+    return bar;
+  }
+
+  /**
+   * Put the action bar just above the selected part (below it when there is no room above),
+   * kept inside the board. Hidden while the board or a part is being dragged.
+   */
+  private placeCtxBar(): void {
+    const bar = this.ctxBar;
+    if (!bar) return;
+    const s = this.app.selection;
+    const part = s?.kind === 'part' && this.app.selCount === 1 ? this.app.part(s.id) : undefined;
+    const busy = (this.drag && this.drag.kind !== 'wire') || this.pointers.size > 1 || this.movingPart || this.app.placing;
+    if (!part || busy) {
+      bar.hidden = true;
+      return;
+    }
+    bar.hidden = false;
+    const box = this.partBox(part);
+    const z = this.zoom;
+    const left = (box.x - 6) * z + this.pan.x;
+    const right = (box.x + box.w + 6) * z + this.pan.x;
+    const top = (box.y - 6) * z + this.pan.y;
+    const bottom = (box.y + box.h + 6) * z + this.pan.y;
+    const host = this.svg.getBoundingClientRect();
+    const w = bar.offsetWidth;
+    const h = bar.offsetHeight;
+    const gap = 8;
+    let y = top - h - gap;
+    if (y < 8) y = bottom + gap;
+    if (y + h > host.height - 8) y = Math.max(8, top - h - gap);
+    const x = Math.min(Math.max(8, (left + right) / 2 - w / 2), Math.max(8, host.width - w - 8));
+    bar.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+  }
+
   private applyView(): void {
     this.vp.setAttribute('transform', `translate(${this.pan.x} ${this.pan.y}) scale(${this.zoom})`);
-    const t = `translate(${this.pan.x} ${this.pan.y}) scale(${this.zoom})`;
-    this.svg.querySelector('#grid')!.setAttribute('patternTransform', t);
-    this.svg.querySelector('#gridmajor')!.setAttribute('patternTransform', t);
+    const tf = `translate(${this.pan.x} ${this.pan.y}) scale(${this.zoom})`;
+    this.svg.querySelector('#grid')!.setAttribute('patternTransform', tf);
+    this.svg.querySelector('#gridmajor')!.setAttribute('patternTransform', tf);
     // Zoomed far out, the small dots would only blur into a grey haze: keep just the major lines.
     this.svg.classList.toggle('far', this.zoom < 0.55);
+    this.placeCtxBar();
   }
 
   private screen(e: { clientX: number; clientY: number }): Pt {

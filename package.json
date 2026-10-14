@@ -1,6 +1,6 @@
 {
   "name": "nabd",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "مختبر الدوائر الذكية (Smart Circuit Lab) - محاكاة الدوائر الكهربائية والإلكترونية لطلاب التعليم المهني",
   "scripts": {
     "build:wasm": "node scripts/build-wasm.mjs",

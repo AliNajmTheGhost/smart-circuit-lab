@@ -572,6 +572,25 @@ export const PARTS: PartDef[] = [
     valueText: () => 'TRIAC',
   },
   {
+    type: 'diac',
+    ar: 'دايك DIAC',
+    en: 'DIAC',
+    cat: 'semis',
+    prefix: 'D',
+    pins: two({ ar: 'الطرف 1', en: 'Terminal 1' }, { ar: 'الطرف 2', en: 'Terminal 2' }),
+    params: [
+      { key: 'Vbo', ar: 'جهد الانهيار (القدح)', en: 'Breakover voltage', unit: 'V', def: 32, min: 1 },
+      { key: 'Ih', ar: 'تيار المسك', en: 'Holding current', unit: 'A', def: 0.002, min: 1e-6 },
+    ],
+    box: { x: -40, y: -20, w: 80, h: 40 },
+    labelAt: { x: 0, y: -28 },
+    desc: {
+      ar: 'لا يوصل في أي اتجاه حتى يصل الجهد إلى جهد الانهيار (نحو 32 فولت)، ثم يوصل فجأة. يستخدم لقدح الترياك.',
+      en: 'Blocks both ways until the voltage reaches breakover (about 32 V), then conducts. Used to fire a triac.',
+    },
+    valueText: (p) => `${num(p, 'Vbo')}V`,
+  },
+  {
     type: 'npn',
     ar: 'ترانزستور NPN',
     en: 'NPN transistor',

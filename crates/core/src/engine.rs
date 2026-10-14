@@ -14,6 +14,10 @@ use std::collections::{HashMap, HashSet};
 const MAX_ITER: usize = 80;
 /// After this many Newton iterations, take half steps so stubborn circuits still settle.
 const DAMP_AFTER: usize = 25;
+/// A step whose iterations do not settle is done again as this many shorter steps.
+const SUB_STEPS: usize = 8;
+/// How many times a step may be split (8, 64, then 512 shorter steps).
+const MAX_SPLITS: usize = 3;
 /// A tiny leak from every node to ground keeps isolated pieces solvable.
 const NODE_LEAK: f64 = 1e-12;
 
@@ -229,67 +233,136 @@ impl Engine {
     }
 
     /// Advance one time step. Returns parts that were damaged in this step.
+    ///
+    /// When Newton's method does not settle (a transistor snapping on in a multivibrator, say),
+    /// the step is done again as several shorter steps instead of accepting a wrong answer,
+    /// which could show impossible currents and burn parts that are fine.
     pub fn step(&mut self) -> Vec<PartIssue> {
         if self.failure.is_some() {
             return Vec::new();
         }
+        let mut damaged = Vec::new();
+        self.advance(self.dt, 0, &mut damaged);
+        damaged
+    }
+
+    /// Move forward by `dt`, splitting the step (up to `MAX_SPLITS` times) while it does not settle.
+    fn advance(&mut self, dt: f64, depth: usize, damaged: &mut Vec<PartIssue>) {
+        if self.newton(self.t + dt, dt, 0.0) || (self.failure.is_none() && depth == 0 && self.gmin_stepping(dt)) {
+            damaged.extend(self.commit(dt, true));
+            return;
+        }
+        if self.failure.is_some() {
+            return;
+        }
+        if depth >= MAX_SPLITS {
+            // Still unsettled: keep going, but such a rough answer must not burn anything.
+            self.rough_steps += 1;
+            self.commit(dt, false);
+            return;
+        }
+        // The capacitor and coil histories assume equal steps: restart them for the short steps
+        // and again afterwards.
+        self.restart_histories();
+        let h = dt / SUB_STEPS as f64;
+        for _ in 0..SUB_STEPS {
+            self.advance(h, depth + 1, damaged);
+            if self.failure.is_some() {
+                return;
+            }
+        }
+        self.restart_histories();
+    }
+
+    /// A circuit that snaps from one state to another (the two transistors of a multivibrator)
+    /// has no nearby answer for Newton to find. Tie every node to ground through a conductance,
+    /// solve, then loosen it step by step: each answer starts the next, and the last one is the
+    /// circuit's real new state. `guess` holds it on success.
+    fn gmin_stepping(&mut self, dt: f64) -> bool {
+        let saved = self.x.clone();
+        let mut ok = true;
+        let mut g = 1e-2;
+        while ok && g >= 1e-13 {
+            ok = self.newton(self.t + dt, dt, g) && self.failure.is_none();
+            // Continue from this answer.
+            self.x.copy_from_slice(&self.guess);
+            g /= 10.0;
+        }
+        ok = ok && self.newton(self.t + dt, dt, 0.0) && self.failure.is_none();
+        self.x.copy_from_slice(&saved);
+        ok
+    }
+
+    fn restart_histories(&mut self) {
+        for d in &mut self.devices {
+            let s = d.model.save();
+            if !s.is_empty() {
+                d.model.load(&s);
+            }
+        }
+    }
+
+    /// Solve the equations at time `t1` into `guess`, starting from the last solution.
+    /// False when the iterations did not settle (or the simulation failed).
+    fn newton(&mut self, t1: f64, dt: f64, gshunt: f64) -> bool {
         let n = self.n;
-        let t1 = self.t + self.dt;
-        let dt = self.dt;
         let Engine { devices, stamper, lu, guess, x, ir_links, lights, .. } = self;
         guess.copy_from_slice(x);
         // Transmitter currents do not change while stamping, so light is computed once per step.
         for (r, _) in ir_links.iter() {
             lights[*r] = Self::ir_light(devices, ir_links, *r);
         }
-        let mut converged = n == 0;
-        if n > 0 {
-            for iter in 0..MAX_ITER {
-                self.iterations += 1;
-                stamper.clear();
-                for (d, &ir_light) in devices.iter_mut().zip(lights.iter()) {
-                    d.io.limited = false;
-                    if d.fault != Fault::None {
-                        d.fault.stamp(stamper, &d.io.nodes);
-                        continue;
-                    }
-                    let ctx = Ctx { t: t1, dt, x: guess, ir_light };
-                    d.model.stamp(stamper, &ctx, &mut d.io);
+        if n == 0 {
+            return true;
+        }
+        for iter in 0..MAX_ITER {
+            self.iterations += 1;
+            stamper.clear();
+            for (d, &ir_light) in devices.iter_mut().zip(lights.iter()) {
+                d.io.limited = false;
+                if d.fault != Fault::None {
+                    d.fault.stamp(stamper, &d.io.nodes);
+                    continue;
                 }
-                for i in 0..n {
-                    stamper.g[i * n + i] += NODE_LEAK;
+                let ctx = Ctx { t: t1, dt, x: guess, ir_light };
+                d.model.stamp(stamper, &ctx, &mut d.io);
+            }
+            for i in 0..n {
+                stamper.g[i * n + i] += NODE_LEAK + gshunt;
+            }
+            if !lu.solve(&stamper.g, &mut stamper.b) {
+                self.failure = Some(Failure::Singular);
+                return false;
+            }
+            let next = &stamper.b;
+            let mut ok = !devices.iter().any(|d| d.io.limited);
+            for i in 0..n {
+                if !next[i].is_finite() {
+                    self.failure = Some(Failure::Diverged);
+                    return false;
                 }
-                if !lu.solve(&stamper.g, &mut stamper.b) {
-                    self.failure = Some(Failure::Singular);
-                    return Vec::new();
-                }
-                let next = &stamper.b;
-                let mut ok = !devices.iter().any(|d| d.io.limited);
-                for i in 0..n {
-                    if !next[i].is_finite() {
-                        self.failure = Some(Failure::Diverged);
-                        return Vec::new();
-                    }
-                    if (next[i] - guess[i]).abs() > 1e-6 + 1e-4 * next[i].abs() {
-                        ok = false;
-                    }
-                }
-                if iter >= DAMP_AFTER {
-                    for i in 0..n {
-                        guess[i] += 0.5 * (next[i] - guess[i]);
-                    }
-                } else {
-                    guess.copy_from_slice(next);
-                }
-                if !self.nonlinear || (ok && iter > 0) {
-                    converged = true;
-                    break;
+                if (next[i] - guess[i]).abs() > 1e-6 + 1e-4 * next[i].abs() {
+                    ok = false;
                 }
             }
+            if iter >= DAMP_AFTER {
+                for i in 0..n {
+                    guess[i] += 0.5 * (next[i] - guess[i]);
+                }
+            } else {
+                guess.copy_from_slice(next);
+            }
+            if !self.nonlinear || (ok && iter > 0) {
+                return true;
+            }
         }
-        if !converged {
-            self.rough_steps += 1;
-        }
+        false
+    }
+
+    /// Take the solution in `guess` as the new state at `t + dt` and let every part update.
+    fn commit(&mut self, dt: f64, check_limits: bool) -> Vec<PartIssue> {
+        let t1 = self.t + dt;
+        let Engine { devices, guess, x, ir_links, .. } = self;
         x.copy_from_slice(guess);
         self.t = t1;
         let mut damaged = Vec::new();
@@ -302,7 +375,7 @@ impl Engine {
                 continue;
             }
             d.model.accept(&ctx, &mut d.io);
-            if d.io.broken {
+            if d.io.broken || !check_limits {
                 continue;
             }
             if let Some(issue) = d.model.limits(&ctx, &d.io) {
