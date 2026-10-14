@@ -182,6 +182,7 @@ pub fn create(kind: &str, p: &Params, pins: usize) -> Box<dyn Model> {
         "irrx" => Box::new(Diode::new(DiodeKind::IrReceiver)),
         "scr" => Box::new(semis::Thyristor::new(false)),
         "triac" => Box::new(semis::Thyristor::new(true)),
+        "diac" => Box::new(semis::Diac::default()),
         "npn" => Box::new(semis::Bjt::new(1.0)),
         "pnp" => Box::new(semis::Bjt::new(-1.0)),
         "nmos" => Box::new(semis::Mosfet::new(1.0)),

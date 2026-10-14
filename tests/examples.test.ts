@@ -6,7 +6,7 @@ import { Engine } from './engine';
 describe('examples', () => {
   for (const ex of EXAMPLES) {
     // Parts added after the move to Rust exist only in the Rust engine.
-    const rustOnly = ex.build().parts.some((p) => p.type === 'speaker' || p.type === 'buzzer');
+    const rustOnly = ex.build().parts.some((p) => ['speaker', 'buzzer', 'ctransformer', 'diac'].includes(p.type));
     it.skipIf(rustOnly && ENGINE_KIND === 'ts')(`${ex.id}: every pin is wired and it simulates cleanly`, () => {
       const doc = ex.build();
       const e = new Engine(doc);

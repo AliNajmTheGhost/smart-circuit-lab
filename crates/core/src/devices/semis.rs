@@ -109,6 +109,79 @@ impl Model for Thyristor {
     }
 }
 
+/// DIAC: blocks in both directions until the voltage reaches the breakover voltage (about 32 V),
+/// then conducts like a diode in that direction until the current falls below the holding current.
+/// Used to fire a triac from an RC phase-shift network.
+#[derive(Debug)]
+pub struct Diac {
+    vbo: f64,
+    ih: f64,
+    on: bool,
+    fwd: Junction,
+    rev: Junction,
+}
+
+impl Default for Diac {
+    fn default() -> Self {
+        Self { vbo: 32.0, ih: 0.002, on: false, fwd: Junction::new(1e-10, 1.6 * VT), rev: Junction::new(1e-10, 1.6 * VT) }
+    }
+}
+
+impl Model for Diac {
+    fn configure(&mut self, p: &Params) {
+        self.vbo = p.num("Vbo", 32.0).max(1.0);
+        self.ih = p.num("Ih", 0.002).max(1e-6);
+    }
+    fn nonlinear(&self) -> bool {
+        true
+    }
+    fn stamp(&mut self, s: &mut Stamper, c: &Ctx, io: &mut Io) {
+        if io.broken {
+            return;
+        }
+        let (a, b) = (io.nodes[0], io.nodes[1]);
+        let v = io.vd(c.x, 0, 1);
+        if self.on {
+            let lim = self.fwd.stamp(s, a, b, v);
+            io.limited = self.rev.stamp(s, b, a, -v) || lim;
+        } else {
+            s.g(a, b, 1e-7);
+        }
+    }
+    fn accept(&mut self, c: &Ctx, io: &mut Io) {
+        if io.broken {
+            io.zero();
+            return;
+        }
+        let v = io.vd(c.x, 0, 1);
+        let i = if self.on { self.fwd.current(v) - self.rev.current(-v) } else { v * 1e-7 };
+        io.set2(i);
+        if !self.on && v.abs() >= self.vbo {
+            self.on = true;
+        } else if self.on && i.abs() < self.ih {
+            self.on = false;
+        }
+    }
+    fn ac(&self, s: &mut AcStamper, _w: f64, io: &Io) {
+        s.yr(io.nodes[0], io.nodes[1], if self.on { self.fwd.g() } else { 1e-7 });
+    }
+    fn limits(&self, _c: &Ctx, io: &Io) -> Option<Issue> {
+        let i = io.cur[0].abs();
+        (i > 2.0).then(|| Issue::burn("burn.thyristor", &[("i", i)]))
+    }
+    fn extra(&self, _c: &Ctx, _io: &Io, out: &mut Extra) {
+        out.push(("on", f64::from(self.on)));
+    }
+    fn save(&self) -> Vec<f64> {
+        vec![f64::from(self.on)]
+    }
+    fn load(&mut self, s: &[f64]) {
+        if let Some(&v) = s.first() {
+            self.on = v != 0.0;
+        }
+    }
+}
+
 /// Ebers–Moll bipolar transistor with the Early effect. Pins: base, collector, emitter.
 #[derive(Debug)]
 pub struct Bjt {

@@ -320,6 +320,7 @@ export class Inspector {
           [t('halfBottomV'), () => fmt(node(3) - node(4), 'V')],
           [t('primaryI'), () => fmt(x('i1'), 'A')],
         ];
+      case 'diac':
       case 'scr':
       case 'triac':
         return [

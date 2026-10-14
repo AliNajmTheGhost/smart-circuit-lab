@@ -913,6 +913,57 @@ select {
 
 /* ------------------------------------------------------------------ floating controls on the board */
 
+/* Floating actions over the selected part. Solid surface, no blur: it moves with the board. */
+.ctxbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  direction: ltr;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 99px;
+  box-shadow: var(--shadow-2);
+}
+.ctxbar[hidden] {
+  display: none;
+}
+.ctxbar button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 99px;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.ctxbar button:hover {
+  background: var(--surface-2);
+  color: var(--accent);
+}
+.ctxbar [data-ctx='delete'] {
+  color: var(--bad);
+}
+.ctx-sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 2px;
+  background: var(--rule);
+}
+/* Fingers need bigger targets (at least 44 px). */
+@media (pointer: coarse) {
+  .ctxbar button {
+    width: 44px;
+    height: 44px;
+  }
+}
 .board-hint {
   position: absolute;
   top: 14px;

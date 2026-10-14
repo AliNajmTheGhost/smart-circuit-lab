@@ -607,6 +607,31 @@
    "internalNodes": 0
   },
   {
+   "type": "diac",
+   "pins": [
+    {
+     "x": -40,
+     "y": 0
+    },
+    {
+     "x": 40,
+     "y": 0
+    }
+   ],
+   "params": [
+    {
+     "key": "Vbo",
+     "def": 32
+    },
+    {
+     "key": "Ih",
+     "def": 0.002
+    }
+   ],
+   "optional": [],
+   "internalNodes": 0
+  },
+  {
    "type": "npn",
    "pins": [
     {

@@ -297,7 +297,9 @@ export class Toolbar {
   examples(): void {
     const grades = [1, 2, 3]
       .map((g) => {
-        const list = EXAMPLES.filter((ex) => (ex.grade ?? 1) === g);
+        // In book order: by exercise number, then the examples without one.
+        const num = (ex: (typeof EXAMPLES)[number]) => (ex.ref && /^\d/.test(ex.ref) ? parseInt(ex.ref, 10) : 999);
+        const list = EXAMPLES.filter((ex) => (ex.grade ?? 1) === g).sort((a, b) => num(a) - num(b));
         if (!list.length) return '';
         return `<section class="grade"><h3 class="grade-head"><span>${t(`grade${g}`)}</span><small>${list.length}</small></h3><div class="ex-grid">${list
           .map(

@@ -116,17 +116,29 @@ export class Panels {
       this.app.select(null);
     };
     side.prepend(handle);
+    // A single part has its own floating action bar; its ⚙ opens the sheet. Wires and groups
+    // have no bar, so their sheet still opens by itself.
+    this.board.onProperties = () => {
+      if (phone.matches) {
+        document.body.classList.add('show-side');
+        reveal();
+      } else document.querySelector<HTMLElement>('#side input, #side select')?.focus();
+    };
+    const reveal = () => {
+      document.body.classList.remove('show-palette');
+      side.scrollTop = 0;
+      // Keep what was tapped in view above the sheet.
+      const s = this.app.selection;
+      if (s) requestAnimationFrame(() => this.board.reveal(s, window.innerHeight - side.offsetHeight));
+    };
     const sync = () => {
-      if (!phone.matches) return document.body.classList.remove('show-side');
-      const open = this.app.selCount > 0;
-      document.body.classList.toggle('show-side', open);
-      if (open) {
-        document.body.classList.remove('show-palette');
-        side.scrollTop = 0;
-        // Keep what was tapped in view above the sheet.
-        const s = this.app.selection;
-        if (s) requestAnimationFrame(() => this.board.reveal(s, window.innerHeight - side.offsetHeight));
-      }
+      const body = document.body.classList;
+      if (!phone.matches || this.app.selCount === 0) return body.remove('show-side');
+      const s = this.app.selection;
+      const singlePart = s?.kind === 'part' && this.app.selCount === 1;
+      if (singlePart && !body.contains('show-side')) return;
+      body.add('show-side');
+      reveal();
     };
     this.app.on('select', sync);
     // Turning the phone (crossing the width limit) must not leave the sheet out of step.

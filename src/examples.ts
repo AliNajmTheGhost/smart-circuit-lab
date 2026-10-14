@@ -1,6 +1,7 @@
 import { Builder } from './model/docops';
 import type { Bilingual } from './model/library';
 import type { CircuitDoc } from './model/types';
+import { GRADE2 } from './examples-grade2';
 
 export interface Example extends Bilingual {
   id: string;
@@ -344,7 +345,7 @@ export const EXAMPLES: Example[] = [
     grade: 2,
     ar: 'الثايرستور: قفل التشغيل',
     en: 'SCR latch',
-    ref: 'الوحدة 7',
+    ref: '35',
     build() {
       const b = new Builder('الثايرستور');
       b.add('battery', 0, 0, 0, { V: 12 });
@@ -393,6 +394,7 @@ export const EXAMPLES: Example[] = [
     grade: 2,
     ar: 'مكبر الدفع والسحب (محولتان بنقطة وسطية)',
     en: 'Push-pull amplifier (two centre-tapped transformers)',
+    ref: '3',
     scopeWindow: 0.001,
     build() {
       const b = new Builder('مكبر الدفع والسحب');
@@ -520,7 +522,7 @@ export const EXAMPLES: Example[] = [
     grade: 2,
     ar: 'كشف إشارة AM بالثنائي',
     en: 'AM envelope detector',
-    ref: 'الوحدة 4',
+    ref: '20',
     scopeWindow: 0.01,
     build() {
       const b = new Builder('كاشف AM');
@@ -565,8 +567,8 @@ export const EXAMPLES: Example[] = [
   {
     id: 'phase-shift',
     grade: 2,
-    ar: 'مذبذب إزاحة الطور RC',
-    en: 'RC phase-shift oscillator',
+    ar: 'مذبذب إزاحة الطور RC بمكبر العمليات',
+    en: 'RC phase-shift oscillator with an op-amp',
     ref: '7',
     scopeWindow: 0.01,
     build() {
@@ -739,7 +741,7 @@ export const EXAMPLES: Example[] = [
     grade: 2,
     ar: 'خط النقل: الانعكاس والتأخير',
     en: 'Transmission line: delay and reflection',
-    ref: 'الوحدة 5',
+    ref: '25',
     scopeWindow: 0.001,
     build() {
       const b = new Builder('خط النقل');
@@ -759,6 +761,7 @@ export const EXAMPLES: Example[] = [
   },
   twoSources('pulse-mod', 'التضمين النبضي PAM و PPM', 'Pulse modulation PAM and PPM', '15–18', { wave: 'pam', Vp: 5, f: 1000, fm: 50, m: 0.6, duty: 0.3 }, { wave: 'ppm', Vp: 5, f: 1000, fm: 50, duty: 0.1 }, 0.05),
   twoSources('digital-mod', 'التضمين الرقمي ASK و FSK', 'Digital modulation ASK and FSK', '19–20', { wave: 'ask', Vp: 2, f: 2000, fm: 200 }, { wave: 'fsk', Vp: 2, f: 1000, fm: 200, dev: 1000 }, 0.02),
+  ...GRADE2,
 ];
 
 /** Two generators, each loaded by 1 kΩ and watched on its own oscilloscope channel. */
